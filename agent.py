@@ -17,7 +17,7 @@ load_dotenv()
 
 PROVIDERS = {
     "groq": {"base_url": "https://api.groq.com/openai/v1", "key": "GROQ_API_KEY",
-             "model": "llama-3.3-70b-versatile"},
+             "model": "openai/gpt-oss-20b"},
     "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
                "key": "GEMINI_API_KEY", "model": "gemini-2.5-flash"},
 }
@@ -31,6 +31,8 @@ Rules:
 - Pick the tool that matches the question: decision_history for "why did we...", who_knows for
   "who knows/can help with...", impact_analysis for "what breaks if...", ownership for "who owns...",
   knowledge_risk for people-who-left questions, find_connection for "how is X related to Y".
+- Pass concise canonical graph topics to tools (for example, "event bus", not "event bus migration").
+- If a tool reports no match, retry with the key entity or search its exact name before concluding no data exists.
 - If a result names a source id, read it with get_item when the exact wording matters.
 - Cite sources inline with their ids in square brackets, like [DEC-5], [D4], [T-101], [M3].
 - Say clearly when a person has left the company (status 'left') or a decision was superseded.

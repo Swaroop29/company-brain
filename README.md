@@ -56,17 +56,26 @@ CALL algo.pageRank('System', 'DEPENDS_ON') YIELD node, score RETURN node.name, s
 
 ## Run it
 
-1. Start FalkorDB:
+Prerequisites: Python, Docker Desktop, and an API key for Groq or Gemini.
+
+1. Start FalkorDB (make sure Docker Desktop is running):
    ```
    docker run -d --name falkordb -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data falkordb/falkordb:latest
    ```
-2. Install and configure:
+   If the container already exists but is stopped, start it with `docker start falkordb`.
+2. From the project directory, create a virtual environment and install dependencies:
    ```
-   pip install -r requirements.txt
-   copy .env.example .env      (then add a free GROQ_API_KEY or GEMINI_API_KEY)
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
+   python -m pip install -r requirements.txt
    ```
-3. Check the graph tools (optional): `python ingest.py` then `python smoke_test.py`
-4. Launch the app: `streamlit run app.py` (it loads the demo data automatically on first run)
+3. Copy `.env.example` to `.env` and add a `GROQ_API_KEY` or `GEMINI_API_KEY`. Groq is the default provider and uses `openai/gpt-oss-20b`; set `LLM_PROVIDER=gemini` to use Gemini instead. `LLM_MODEL` can override the selected provider's default.
+4. Launch the app from the project directory:
+   ```
+   streamlit run app.py
+   ```
+   The app loads the demo graph automatically on first run. Do not start it with `python app.py`.
+5. Optional graph checks: `python ingest.py` rebuilds the graph from the synthetic dataset, and `python smoke_test.py` exercises the graph tools.
 
 Explore the raw graph at http://localhost:3000 (FalkorDB Browser, graph `companybrain`).
 
