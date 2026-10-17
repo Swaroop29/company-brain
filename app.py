@@ -86,6 +86,25 @@ with st.sidebar:
                 new_id = tools.add_decision(title, why, by, about, replaces.split(":")[0] if replaces else None)
                 st.success(f"Added {new_id}. Ask the agent about it.")
 
+    with st.expander("Import or update company records"):
+        st.caption("Upload a JSON list of Documents, Tickets, or Messages. An existing id is updated in place.")
+        st.code('''[
+  {"type":"Ticket","id":"T-200","title":"Event bus outage","status":"open",
+   "assignee":"Priya Nair","created":"2026-10-17","affects":["event-bus"]}
+]''', language="json")
+        uploaded = st.file_uploader("JSON file", type="json", key="company_records")
+        if uploaded and st.button("Import records", use_container_width=True):
+            try:
+                payload = json.loads(uploaded.getvalue().decode("utf-8"))
+                records = payload.get("records") if isinstance(payload, dict) else payload
+                imported = tools.import_records(records)
+                st.success(f"Imported or updated {len(imported)} record(s): " + ", ".join(r["id"] for r in imported))
+                st.rerun()
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as e:
+                st.error(f"Could not import records: {e}")
+            except Exception as e:
+                st.error(f"Import failed: {e}")
+
     if st.button("Reset demo data"):
         ingest()
         st.session_state.pop("messages", None)

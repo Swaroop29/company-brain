@@ -18,6 +18,8 @@ Built for **Graph Hacks (FalkorDB x WeMakeDevs), Track 3: Company Brain**.
 | Which systems are most critical? | `algo.pageRank` on the dependency graph |
 
 New decisions can be logged from the sidebar, so the graph stays current and old decisions show as superseded.
+Documents, tickets and chat messages can also be imported from a JSON file. Records are matched by `id`, so
+uploading an existing record updates its fields and relationships instead of creating a duplicate.
 
 ## Graph data model
 
@@ -78,6 +80,29 @@ Prerequisites: Python, Docker Desktop, and an API key for Groq or Gemini.
 5. Optional graph checks: `python ingest.py` rebuilds the graph from the synthetic dataset, and `python smoke_test.py` exercises the graph tools.
 
 Explore the raw graph at http://localhost:3000 (FalkorDB Browser, graph `companybrain`).
+
+### Keep the graph current
+
+In the sidebar, open **Import or update company records** and upload a JSON array. Supported `type` values are
+`Document`, `Ticket`, and `Message`. Authors and assignees must already exist as people in the graph; referenced
+systems and projects must also already exist.
+
+```json
+[
+  {
+    "type": "Ticket",
+    "id": "T-200",
+    "title": "Event bus outage",
+    "status": "open",
+    "assignee": "Priya Nair",
+    "created": "2026-10-17",
+    "affects": ["event-bus"]
+  }
+]
+```
+
+An imported ticket immediately affects impact analysis and expertise results. Imported documents and messages
+immediately become searchable and contribute to ownership and expertise answers.
 
 ## Architecture
 

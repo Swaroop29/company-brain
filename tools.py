@@ -397,6 +397,94 @@ def add_decision(title, rationale, decided_by, concerns, supersedes_id=None, dat
     return new_id
 
 
+def import_records(records):
+    """Create or update Documents, Tickets and Messages imported from the sidebar.
+
+    Each record must have ``type`` set to Document, Ticket or Message. Existing
+    records with the same ``id`` are updated in place, so the graph has one
+    current version of each company record.
+    """
+    if not isinstance(records, list) or not records:
+        raise ValueError("Upload a JSON array with at least one record.")
+
+    g = get_graph()
+    imported = []
+
+    def required(record, fields):
+        missing = [field for field in fields if not record.get(field)]
+        if missing:
+            raise ValueError(f"Record {record.get('id', '<no id>')} is missing: {', '.join(missing)}")
+
+    def person_exists(name):
+        return bool(g.query("MATCH (p:Person {name:$n}) RETURN p LIMIT 1", {"n": name}).result_set)
+
+    def entity_exists(label, name):
+        if label not in ("System", "Project"):
+            raise ValueError("Related entities must use System or Project labels.")
+        return bool(g.query(f"MATCH (n:{label} {{name:$n}}) RETURN n LIMIT 1", {"n": name}).result_set)
+
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("Every imported item must be a JSON object.")
+        kind = record.get("type")
+        if kind == "Document":
+            required(record, ("id", "title", "kind", "date", "author", "summary"))
+            if not person_exists(record["author"]):
+                raise ValueError(f"Document {record['id']}: author '{record['author']}' is not in the graph.")
+            about = record.get("about", [])
+            for target in about:
+                if not entity_exists(target.get("label"), target.get("name")):
+                    raise ValueError(f"Document {record['id']}: unknown related entity {target}.")
+            g.query(
+                "MERGE (d:Document {id:$id}) "
+                "SET d.title=$title, d.kind=$kind, d.date=$date, d.summary=$summary "
+                "WITH d MATCH (d)-[old:AUTHORED]->() DELETE old "
+                "WITH d MATCH (a:Person {name:$author}) MERGE (a)-[:AUTHORED]->(d)",
+                {key: record[key] for key in ("id", "title", "kind", "date", "summary")} | {"author": record["author"]})
+            g.query("MATCH (d:Document {id:$id})-[old:ABOUT]->() DELETE old", {"id": record["id"]})
+            for target in about:
+                g.query(f"MATCH (d:Document {{id:$id}}), (t:{target['label']} {{name:$name}}) "
+                        "MERGE (d)-[:ABOUT]->(t)", {"id": record["id"], "name": target["name"]})
+        elif kind == "Ticket":
+            required(record, ("id", "title", "status", "assignee", "created"))
+            if not person_exists(record["assignee"]):
+                raise ValueError(f"Ticket {record['id']}: assignee '{record['assignee']}' is not in the graph.")
+            affects = record.get("affects", [])
+            for name in affects:
+                if not entity_exists("System", name):
+                    raise ValueError(f"Ticket {record['id']}: unknown system '{name}'.")
+            g.query(
+                "MERGE (k:Ticket {id:$id}) SET k.title=$title, k.status=$status, k.created=$created "
+                "WITH k MATCH (k)-[old:ASSIGNED_TO]->() DELETE old "
+                "WITH k MATCH (a:Person {name:$assignee}) MERGE (k)-[:ASSIGNED_TO]->(a)",
+                {key: record[key] for key in ("id", "title", "status", "created")} | {"assignee": record["assignee"]})
+            g.query("MATCH (k:Ticket {id:$id})-[old:AFFECTS]->() DELETE old", {"id": record["id"]})
+            for name in affects:
+                g.query("MATCH (k:Ticket {id:$id}), (s:System {name:$name}) MERGE (k)-[:AFFECTS]->(s)",
+                        {"id": record["id"], "name": name})
+        elif kind == "Message":
+            required(record, ("id", "channel", "author", "date", "text"))
+            if not person_exists(record["author"]):
+                raise ValueError(f"Message {record['id']}: author '{record['author']}' is not in the graph.")
+            mentions = record.get("mentions", [])
+            for target in mentions:
+                if not entity_exists(target.get("label"), target.get("name")):
+                    raise ValueError(f"Message {record['id']}: unknown related entity {target}.")
+            g.query(
+                "MERGE (m:Message {id:$id}) SET m.channel=$channel, m.date=$date, m.text=$text "
+                "WITH m MATCH (m)-[old:POSTED]->() DELETE old "
+                "WITH m MATCH (a:Person {name:$author}) MERGE (a)-[:POSTED]->(m)",
+                {key: record[key] for key in ("id", "channel", "date", "text")} | {"author": record["author"]})
+            g.query("MATCH (m:Message {id:$id})-[old:MENTIONS]->() DELETE old", {"id": record["id"]})
+            for target in mentions:
+                g.query(f"MATCH (m:Message {{id:$id}}), (t:{target['label']} {{name:$name}}) "
+                        "MERGE (m)-[:MENTIONS]->(t)", {"id": record["id"], "name": target["name"]})
+        else:
+            raise ValueError(f"Record {record.get('id', '<no id>')}: type must be Document, Ticket, or Message.")
+        imported.append({"id": record["id"], "type": kind})
+    return imported
+
+
 # ------------------------------------------------- registry + schemas for the LLM
 FUNCTIONS = {f.__name__: f for f in (search, get_item, who_knows, ownership, decision_history,
                                      impact_analysis, find_connection, key_systems, knowledge_risk)}
