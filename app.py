@@ -105,6 +105,47 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"Import failed: {e}")
 
+    with st.expander("Respond to a system incident"):
+        st.caption("The graph suggests an owner and priority. Review the plan, then create the follow-up ticket.")
+        incident_systems = [row[0] for row in g.query("MATCH (s:System) RETURN s.name ORDER BY s.name").result_set]
+        incident_system = st.selectbox("Affected system", incident_systems, key="incident_system")
+        response = tools.incident_response(incident_system)["data"]
+        action = response["recommended_action"]
+        assignees = [owner["name"] for owner in response["available_assignees"]]
+        st.write(f"**Graph finding:** {action['reason']}")
+        st.write("**Suggested owner:** " + (action["suggested_assignee"] or "No active owner found"))
+        if response["affected_systems"]:
+            st.write("**Affected systems:** " + ", ".join(response["affected_systems"]))
+        if assignees:
+            with st.form("create_incident_followup", clear_on_submit=True):
+                ticket_title = st.text_input("Follow-up ticket", value=action["title"])
+                assignee = st.selectbox("Assign to", assignees)
+                priorities = ["medium", "high", "critical"]
+                priority = st.selectbox("Priority", priorities, index=priorities.index(action["priority"]))
+                if st.form_submit_button("Create follow-up ticket") and ticket_title:
+                    try:
+                        ticket = tools.create_incident_followup(incident_system, ticket_title, assignee, priority)
+                        ticket_view = tools.get_item(ticket["id"])
+                        content = (
+                            f"### Follow-up ticket created: `{ticket['id']}`\n\n"
+                            f"**{ticket_title}** is now an open `{priority}` priority ticket assigned to "
+                            f"{assignee}.\n\n"
+                            "The graph now includes:\n\n"
+                            f"- `{ticket['id']}` → `ASSIGNED_TO` → {assignee}\n"
+                            f"- `{ticket['id']}` → `AFFECTS` → {ticket['system']}\n\n"
+                            "Open **How I got this** to see the graph path and Cypher used to read the new ticket."
+                        )
+                        st.session_state.setdefault("messages", []).append({
+                            "role": "assistant", "content": content,
+                            "trace": [{"tool": "get_item", "args": {"item_id": ticket["id"]},
+                                       "cypher": ticket_view["cypher"]}],
+                            "graph": ticket_view["graph"]})
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not create follow-up ticket: {e}")
+        else:
+            st.warning("No active owner is available for this system.")
+
     if st.button("Reset demo data"):
         ingest()
         st.session_state.pop("messages", None)

@@ -104,6 +104,14 @@ systems and projects must also already exist.
 An imported ticket immediately affects impact analysis and expertise results. Imported documents and messages
 immediately become searchable and contribute to ownership and expertise answers.
 
+### Respond to an incident
+
+The sidebar's **Respond to a system incident** panel uses the graph to find dependent systems and active members
+of the owning team. It recommends an owner and priority, then creates a confirmed follow-up ticket in FalkorDB.
+After creation, the chat shows the new ticket properties and its `ASSIGNED_TO` and `AFFECTS` links. Open the
+chat message's trace to see the graph visualization. The ticket is immediately visible to later impact and
+expertise queries.
+
 ## Architecture
 
 ```

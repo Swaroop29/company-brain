@@ -277,6 +277,36 @@ def impact_analysis(system: str):
         "open_tickets_on_this_system": tickets})
 
 
+def incident_response(system: str):
+    """Use graph ownership and dependency data to propose a follow-up incident ticket."""
+    ctx = Ctx()
+    ent = _resolve(ctx, system, labels=("System",))
+    if not ent:
+        return ctx.result(_not_found(system, "System"))
+    name = ent[1]
+    owners = []
+    for r in ctx.run("MATCH p=(per:Person {status:'active'})-[:MEMBER_OF]->(team:Team)-[:OWNS]->"
+                     "(s:System {name:$n}) RETURN per.name, per.role, team.name, p ORDER BY per.name", n=name):
+        owners.append({"name": r[0], "role": r[1], "team": r[2]})
+    affected = []
+    for r in ctx.run("MATCH p=(x:System)-[:DEPENDS_ON*1..4]->(s:System {name:$n}) "
+                     "RETURN DISTINCT x.name, p", n=name):
+        affected.append(r[0])
+    priority = "critical" if len(affected) >= 3 else "high"
+    suggested_assignee = owners[0]["name"] if owners else None
+    return ctx.result({
+        "system": name,
+        "affected_systems": affected,
+        "available_assignees": owners,
+        "recommended_action": {
+            "action": "create_followup_ticket",
+            "title": f"Investigate {name} incident and coordinate recovery",
+            "suggested_assignee": suggested_assignee,
+            "priority": priority,
+            "reason": f"{len(affected)} system(s) depend on {name}."}}
+    )
+
+
 def find_connection(a: str, b: str):
     """Shortest path between any two things in the graph (people, systems, documents, ...)."""
     ctx = Ctx()
@@ -378,6 +408,35 @@ def knowledge_risk():
 
 
 # ------------------------------------------------- write path (used by the UI form, not by the LLM)
+def create_incident_followup(system, title, assignee, priority="high", date=None):
+    """Create a graph-backed incident follow-up ticket after user confirmation in the UI."""
+    if priority not in ("medium", "high", "critical"):
+        raise ValueError("Priority must be medium, high, or critical.")
+    ctx = Ctx()
+    ent = _resolve(ctx, system, labels=("System",))
+    if not ent:
+        raise ValueError(_not_found(system, "System")["error"])
+    name = ent[1]
+    g = get_graph()
+    active = g.query("MATCH (p:Person {name:$name, status:'active'}) RETURN p", {"name": assignee}).result_set
+    if not active:
+        raise ValueError(f"'{assignee}' is not an active person in the graph.")
+    ticket_ids = [r[0] for r in g.query("MATCH (k:Ticket) RETURN k.id").result_set]
+    numbers = [int(ticket_id[2:]) for ticket_id in ticket_ids
+               if isinstance(ticket_id, str) and ticket_id.startswith("T-") and ticket_id[2:].isdigit()]
+    new_id = f"T-{max(numbers, default=100) + 1}"
+    if date is None:
+        import datetime
+        date = datetime.date.today().isoformat()
+    g.query("MATCH (p:Person {name:$assignee}), (s:System {name:$system}) "
+            "CREATE (k:Ticket {id:$id, title:$title, status:'open', created:$date, priority:$priority, "
+            "source:'incident_response'})-[:ASSIGNED_TO]->(p) "
+            "CREATE (k)-[:AFFECTS]->(s)",
+            {"id": new_id, "title": title, "assignee": assignee, "system": name,
+             "date": date, "priority": priority})
+    return {"id": new_id, "system": name, "assignee": assignee, "priority": priority}
+
+
 def add_decision(title, rationale, decided_by, concerns, supersedes_id=None, date=None):
     """Log a new decision so the graph stays current. Returns the new decision id."""
     import datetime
@@ -487,7 +546,8 @@ def import_records(records):
 
 # ------------------------------------------------- registry + schemas for the LLM
 FUNCTIONS = {f.__name__: f for f in (search, get_item, who_knows, ownership, decision_history,
-                                     impact_analysis, find_connection, key_systems, knowledge_risk)}
+                                     impact_analysis, incident_response, find_connection, key_systems,
+                                     knowledge_risk)}
 
 
 def _fn(name, desc, props=None, required=None):
@@ -510,6 +570,9 @@ TOOL_SCHEMAS = [
         "decision replaced which. Use for 'why did we...' questions.", {"topic": STR}, ["topic"]),
     _fn("impact_analysis", "What breaks if a system goes down: dependent systems, their owners, projects at "
         "risk, open tickets.", {"system": STR}, ["system"]),
+    _fn("incident_response", "Recommend a graph-backed incident response: affected systems, active owners, "
+        "suggested assignee and priority. Use for questions about what to do after a system failure.",
+        {"system": STR}, ["system"]),
     _fn("find_connection", "Shortest path between any two entities in the company graph.",
         {"a": STR, "b": STR}, ["a", "b"]),
     _fn("key_systems", "Rank the most critical systems by dependency (PageRank graph algorithm)."),
