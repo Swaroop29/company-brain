@@ -2,6 +2,7 @@
 import json
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import agent
 import tools
@@ -23,161 +24,22 @@ EXAMPLES = [
 ]
 
 
-_GRAPH_HTML = """
-<div class="graph-shell">
-  <div class="graph-help">Drag nodes or the background · use the mouse wheel to zoom</div>
-  <button class="reset-view" type="button">Reset view</button>
-  <svg class="evidence-graph" viewBox="0 0 1000 520" aria-label="Interactive graph evidence"></svg>
-</div>
-"""
-
-_GRAPH_CSS = """
-.graph-shell { position: relative; height: 440px; border: 1px solid var(--st-border-color, #3b4252);
-  border-radius: 10px; background: var(--st-secondary-background-color, #151923); overflow: hidden; }
-.evidence-graph { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
-.evidence-graph:active { cursor: grabbing; }
-.graph-help { position: absolute; z-index: 1; left: 12px; top: 10px; font: 12px sans-serif;
-  color: var(--st-text-color, #dce3ec); opacity: .75; pointer-events: none; }
-.reset-view { position: absolute; z-index: 1; right: 12px; top: 8px; border: 1px solid var(--st-border-color, #64748b);
-  border-radius: 6px; padding: 4px 8px; cursor: pointer; color: var(--st-text-color, #dce3ec);
-  background: var(--st-secondary-background-color, #1f2937); }
-"""
-
-_GRAPH_JS = """
-export default function (component) {
-  const { data, parentElement } = component
-  const svg = parentElement.querySelector(".evidence-graph")
-  const reset = parentElement.querySelector(".reset-view")
-  if (!svg || !data) return
-
-  const ns = "http://www.w3.org/2000/svg"
-  const make = (tag, attrs = {}) => {
-    const el = document.createElementNS(ns, tag)
-    Object.entries(attrs).forEach(([key, value]) => el.setAttribute(key, value))
-    return el
-  }
-  const state = parentElement.__graphState || {
-    positions: new Map(), viewport: { x: 0, y: 0, scale: 1 }, drag: null,
-  }
-  parentElement.__graphState = state
-  const nodes = data.nodes || []
-  const edges = data.edges || []
-  const ids = new Set(nodes.map((node) => String(node.id)))
-  for (const id of state.positions.keys()) if (!ids.has(id)) state.positions.delete(id)
-  const columns = Math.max(1, Math.ceil(Math.sqrt(nodes.length)))
-  nodes.forEach((node, index) => {
-    const id = String(node.id)
-    if (!state.positions.has(id)) {
-      const column = index % columns
-      const row = Math.floor(index / columns)
-      const rows = Math.max(1, Math.ceil(nodes.length / columns))
-      state.positions.set(id, {
-        x: 120 + (columns === 1 ? 0 : column * 760 / (columns - 1)),
-        y: 145 + (rows === 1 ? 0 : row * 260 / (rows - 1)),
-      })
-    }
-  })
-
-  svg.replaceChildren()
-  const defs = make("defs")
-  const marker = make("marker", { id: "arrow", viewBox: "0 0 10 10", refX: "9", refY: "5",
-    markerWidth: "6", markerHeight: "6", orient: "auto-start-reverse" })
-  marker.appendChild(make("path", { d: "M 0 0 L 10 5 L 0 10 z", fill: "#718096" }))
-  defs.appendChild(marker)
-  svg.appendChild(defs)
-  const viewport = make("g")
-  svg.appendChild(viewport)
-  const edgeLayer = make("g")
-  const nodeLayer = make("g")
-  viewport.append(edgeLayer, nodeLayer)
-
-  const edgeElements = []
-  edges.forEach((edge) => {
-    const group = make("g")
-    const line = make("line", { stroke: "#718096", "stroke-width": "1.6", "marker-end": "url(#arrow)" })
-    const label = make("text", { fill: "#9aa4b2", "font-size": "11", "text-anchor": "middle" })
-    label.textContent = edge.label
-    group.append(line, label)
-    edgeLayer.appendChild(group)
-    edgeElements.push({ edge, line, label })
-  })
-
-  const nodeElements = new Map()
-  nodes.forEach((node) => {
-    const group = make("g", { "data-node-id": String(node.id), cursor: "grab" })
-    const circle = make("circle", { r: "31", fill: node.color || "#64748b", stroke: "#e2e8f0", "stroke-width": "1.5" })
-    const text = make("text", { fill: "#0e1117", "font-size": "12", "font-weight": "700", "text-anchor": "middle", y: "4" })
-    text.textContent = String(node.text).slice(0, 18)
-    const title = make("title")
-    title.textContent = `${node.text} (${node.label})\\n${node.title || ""}`
-    group.append(circle, text, title)
-    nodeLayer.appendChild(group)
-    nodeElements.set(String(node.id), group)
-  })
-
-  const update = () => {
-    viewport.setAttribute("transform", `translate(${state.viewport.x} ${state.viewport.y}) scale(${state.viewport.scale})`)
-    nodeElements.forEach((group, id) => {
-      const point = state.positions.get(id)
-      group.setAttribute("transform", `translate(${point.x} ${point.y})`)
-    })
-    edgeElements.forEach(({ edge, line, label }) => {
-      const from = state.positions.get(String(edge.from))
-      const to = state.positions.get(String(edge.to))
-      if (!from || !to) return
-      line.setAttribute("x1", from.x); line.setAttribute("y1", from.y)
-      line.setAttribute("x2", to.x); line.setAttribute("y2", to.y)
-      label.setAttribute("x", (from.x + to.x) / 2)
-      label.setAttribute("y", (from.y + to.y) / 2 - 7)
-    })
-  }
-  const pointFor = (event) => {
-    const box = svg.getBoundingClientRect()
-    return { x: (event.clientX - box.left) * 1000 / box.width,
-      y: (event.clientY - box.top) * 520 / box.height }
-  }
-  svg.onpointerdown = (event) => {
-    const target = event.target.closest("[data-node-id]")
-    const point = pointFor(event)
-    state.drag = target ? { type: "node", id: target.dataset.nodeId, point } : { type: "pan", point }
-    svg.setPointerCapture(event.pointerId)
-  }
-  svg.onpointermove = (event) => {
-    if (!state.drag) return
-    const point = pointFor(event)
-    if (state.drag.type === "node") {
-      state.positions.set(state.drag.id, { x: (point.x - state.viewport.x) / state.viewport.scale,
-        y: (point.y - state.viewport.y) / state.viewport.scale })
-    } else {
-      state.viewport.x += point.x - state.drag.point.x
-      state.viewport.y += point.y - state.drag.point.y
-      state.drag.point = point
-    }
-    update()
-  }
-  svg.onpointerup = () => { state.drag = null }
-  svg.onpointercancel = () => { state.drag = null }
-  svg.onwheel = (event) => {
-    event.preventDefault()
-    const factor = event.deltaY < 0 ? 1.12 : 0.89
-    state.viewport.scale = Math.max(0.45, Math.min(2.6, state.viewport.scale * factor))
-    update()
-  }
-  reset.onclick = () => { state.viewport = { x: 0, y: 0, scale: 1 }; update() }
-  update()
-}
-"""
-
-_INTERACTIVE_GRAPH = st.components.v2.component(
-    "interactive_evidence_graph", html=_GRAPH_HTML, css=_GRAPH_CSS, js=_GRAPH_JS,
-)
-
-
-def interactive_graph(graph, key):
-    """Render a draggable, zoomable graph without using deprecated component APIs."""
-    nodes = [{**node, "color": COLORS.get(node["label"], "#64748b")} for node in graph["nodes"]]
-    _INTERACTIVE_GRAPH(data={"nodes": nodes, "edges": graph["edges"]}, key=key, width="stretch", height=440)
-
+def graph_html(graph, height=430):
+    """Render the original physics-based vis-network graph."""
+    nodes = [{"id": n["id"], "label": n["text"], "title": n["title"], "shape": "dot", "size": 16,
+              "color": COLORS.get(n["label"], "#999"), "font": {"color": "#e6e6e6", "size": 12}}
+             for n in graph["nodes"]]
+    edges = [{"from": e["from"], "to": e["to"], "label": e["label"], "arrows": "to",
+              "font": {"size": 9, "color": "#9aa4b2", "strokeWidth": 0}, "color": {"color": "#5b6573"}}
+             for e in graph["edges"]]
+    return f"""
+    <div id="g" style="height:{height - 10}px;border:1px solid #333;border-radius:8px;background:#0e1117"></div>
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <script>
+      new vis.Network(document.getElementById('g'),
+        {{nodes: new vis.DataSet({json.dumps(nodes)}), edges: new vis.DataSet({json.dumps(edges)})}},
+        {{physics: {{stabilization: true, barnesHut: {{springLength: 120}}}}, interaction: {{hover: true}}}});
+    </script>"""
 
 def legend():
     return " ".join(f"<span style='color:{c}'>●</span> {k}" for k, c in COLORS.items())
@@ -389,22 +251,22 @@ if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
 
-def render_trace(m, graph_key):
+def render_trace(m):
     with st.expander("How I got this: tools, Cypher and graph", expanded=False):
         if m.get("graph", {}).get("nodes"):
             st.markdown(legend(), unsafe_allow_html=True)
-            interactive_graph(m["graph"], graph_key)
+            components.html(graph_html(m["graph"]), height=440)
         for step in m.get("trace", []):
             st.markdown(f"**Tool:** `{step['tool']}({json.dumps(step['args'])})`")
             for c in step["cypher"]:
                 st.code(c, language="cypher")
 
 
-for message_index, m in enumerate(st.session_state["messages"]):
+for m in st.session_state["messages"]:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
         if m["role"] == "assistant":
-            render_trace(m, f"evidence-graph-{message_index}")
+            render_trace(m)
 
 question = st.chat_input("e.g. Why did we choose Kafka?") or st.session_state.pop("pending", None)
 if question:
@@ -420,5 +282,5 @@ if question:
             except Exception as e:
                 msg = {"role": "assistant", "content": f"Something went wrong: `{e}`", "trace": [], "graph": {}}
         st.markdown(msg["content"])
-        render_trace(msg, "evidence-graph-new")
+        render_trace(msg)
     st.session_state["messages"].append(msg)

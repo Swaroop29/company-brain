@@ -158,7 +158,7 @@ reading, handoff, and follow-up coordination. To demonstrate an external MCP cli
   finding to the Response Coordinator, and run the Coordinator. The `Incident`, both role reports as `Memory`, the
   `Handoff`, and the `Ticket` remain in FalkorDB after a page refresh.
 - **Track 3:** Ask a question in the chat. Each answer is based on graph queries, and **How I got this** shows
-  the Cypher and graph path used. The graph can be dragged, panned, zoomed, and reset during the demo.
+  the Cypher and graph path used.
 
 If you remove FalkorDB the app has nothing to answer from: the LLM has no company knowledge of its own and
 is instructed to use only tool results.
