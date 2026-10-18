@@ -24,38 +24,122 @@ EXAMPLES = [
 ]
 
 
-def apply_theme(dark_mode):
-    """Apply a simple app-wide light or dark palette without changing the graph evidence canvas."""
-    if dark_mode:
-        palette = {"app": "#0e1117", "sidebar": "#171b26", "text": "#f3f4f6",
-                   "muted": "#aab4c3", "panel": "#202633", "border": "#3a4352"}
-    else:
-        palette = {"app": "#f8fafc", "sidebar": "#ffffff", "text": "#172033",
-                   "muted": "#516174", "panel": "#ffffff", "border": "#d6deea"}
+def apply_theme(theme):
+    """Apply the selected appearance to every Streamlit surface (presentation only)."""
+    palettes = {
+        "dark": {
+            "background": "#0b1220", "secondary": "#141e30", "sidebar": "#0f172a",
+            "text": "#f8fafc", "muted": "#aab4c3", "border": "#334155",
+            "card": "#172235", "info": "#172c44", "accent": "#ef4444",
+            "accent_hover": "#dc2626", "button_hover": "#24334a",
+        },
+        "light": {
+            "background": "#f7f9fc", "secondary": "#edf2f7", "sidebar": "#ffffff",
+            "text": "#172033", "muted": "#526174", "border": "#cbd5e1",
+            "card": "#ffffff", "info": "#e8f1ff", "accent": "#dc2626",
+            "accent_hover": "#b91c1c", "button_hover": "#e9eef5",
+        },
+    }
+    palette = palettes[theme]
     st.markdown(f"""
     <style>
-      .stApp {{ background: {palette['app']}; color: {palette['text']}; }}
-      [data-testid="stSidebar"] {{ background: {palette['sidebar']}; border-right: 1px solid {palette['border']}; }}
-      [data-testid="stSidebar"] *, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp li {{ color: {palette['text']}; }}
-      .stApp [data-testid="stCaptionContainer"] *, .stApp small {{ color: {palette['muted']}; }}
-      .stApp [data-testid="stExpander"], .stApp [data-testid="stChatMessage"] {{
-        background: {palette['panel']}; border-color: {palette['border']}; }}
+      /* Theme variables: all custom styling below reads from these tokens. */
+      :root {{
+        --cb-background: {palette['background']};
+        --cb-secondary: {palette['secondary']};
+        --cb-sidebar: {palette['sidebar']};
+        --cb-text: {palette['text']};
+        --cb-muted: {palette['muted']};
+        --cb-border: {palette['border']};
+        --cb-card: {palette['card']};
+        --cb-info: {palette['info']};
+        --cb-accent: {palette['accent']};
+        --cb-accent-hover: {palette['accent_hover']};
+        --cb-button-hover: {palette['button_hover']};
+      }}
+
+      /* Fix 1: compact sidebar while keeping its collapse control clear. */
+      .stApp, [data-testid="stAppViewContainer"] {{ background: var(--cb-background); color: var(--cb-text); }}
+      section[data-testid="stSidebar"], [data-testid="stSidebar"] {{
+        background: var(--cb-sidebar); border-right: 1px solid var(--cb-border);
+      }}
+      section[data-testid="stSidebar"] > div {{ padding-top: 0 !important; }}
+      [data-testid="stSidebarUserContent"] {{ padding: 2.65rem 1rem 1rem !important; }}
+      [data-testid="stSidebarCollapseButton"] {{ z-index: 10; margin-top: 0.35rem; }}
+      [data-testid="stSidebar"] h1 {{ margin: 0 0 0.1rem !important; font-size: 1.55rem; }}
+      [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {{ margin: 0 0 0.45rem; }}
+      [data-testid="stSidebar"] [data-testid="stAlert"] {{ margin: 0.3rem 0 0.65rem; padding: 0.7rem 0.8rem; }}
+      [data-testid="stSidebar"] .stMarkdown {{ margin: 0.3rem 0; }}
+
+      /* Fix 2: place the website-like header close to the top. */
+      .block-container {{ padding-top: 1.15rem; padding-bottom: 2rem; }}
+      .st-key-top_nav {{ padding: 0 0 0.25rem; min-height: 2.8rem; }}
+      .st-key-nav_brand [data-testid="stMarkdownContainer"] p {{
+        color: var(--cb-text); font-size: 1.35rem; font-weight: 750; line-height: 1.2; margin: 0;
+      }}
+      .st-key-nav_links button {{
+        color: var(--cb-text) !important; font-size: 1.02rem !important; font-weight: 600 !important;
+        padding: 0.5rem 1rem !important; border: 1px solid transparent !important;
+        border-radius: 999px !important; background: transparent !important;
+        min-height: 2.55rem;
+      }}
+      .st-key-nav_links button:hover {{ background: var(--cb-button-hover) !important; color: var(--cb-text) !important; }}
+      .st-key-nav_links button[kind="primary"],
+      .st-key-nav_links [data-testid="stBaseButton-primary"] {{
+        background: var(--cb-accent) !important; color: #ffffff !important; border-color: var(--cb-accent) !important;
+      }}
+      .st-key-nav_links button[kind="primary"]:hover,
+      .st-key-nav_links [data-testid="stBaseButton-primary"]:hover {{ background: var(--cb-accent-hover) !important; }}
+      .st-key-nav_theme button {{
+        color: var(--cb-text) !important; border: 1px solid var(--cb-border) !important;
+        border-radius: 999px !important; background: var(--cb-card) !important;
+        min-height: 2.55rem; min-width: 2.55rem; padding: 0.45rem !important;
+      }}
+      .st-key-nav_theme button:hover {{ background: var(--cb-button-hover) !important; }}
+
+      /* Fix 3 and 4: use palette variables for cards, buttons, forms and messages. */
+      .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp li, .stApp label {{ color: var(--cb-text); }}
+      .stApp [data-testid="stCaptionContainer"] *, .stApp small {{ color: var(--cb-muted); }}
+      .stApp [data-testid="stExpander"], .stApp [data-testid="stChatMessage"],
+      .stApp [data-testid="stMetric"], .stApp [data-testid="stAlert"] {{
+        background: var(--cb-card); border-color: var(--cb-border);
+      }}
+      .stApp [data-testid="stAlert"] {{ background: var(--cb-info); color: var(--cb-text); }}
+      .stApp [data-testid="stMetric"] {{ border: 1px solid var(--cb-border); border-radius: 0.75rem; padding: 0.8rem; }}
       .stApp input, .stApp textarea, .stApp [data-baseweb="select"] > div {{
-        background: {palette['panel']}; color: {palette['text']}; border-color: {palette['border']}; }}
+        background: var(--cb-card) !important; color: var(--cb-text) !important; border-color: var(--cb-border) !important;
+      }}
+      .stApp .stButton > button {{ border-color: var(--cb-border); color: var(--cb-text); background: var(--cb-card); }}
+      .stApp .stButton > button:hover {{ border-color: var(--cb-accent); background: var(--cb-button-hover); }}
+      .stApp .stButton > button[kind="primary"] {{ background: var(--cb-accent); border-color: var(--cb-accent); color: #ffffff; }}
+      .stApp .stButton > button[kind="primary"]:hover {{ background: var(--cb-accent-hover); border-color: var(--cb-accent-hover); }}
+      .stApp hr {{ border-color: var(--cb-border); }}
+
+      /* Allow navigation to stay usable on a narrow display. */
+      @media (max-width: 780px) {{
+        .block-container {{ padding-top: 0.8rem; }}
+        .st-key-nav_brand [data-testid="stMarkdownContainer"] p {{ font-size: 1.15rem; }}
+        .st-key-nav_links button {{ font-size: 0.94rem !important; padding: 0.45rem 0.7rem !important; }}
+      }}
     </style>
     """, unsafe_allow_html=True)
 
 
 def graph_html(graph, height=430):
     """Render the original physics-based vis-network graph."""
+    # Presentation only: keep evidence labels readable in either selected theme.
+    graph_palette = {
+        "dark": {"background": "#0b1220", "border": "#334155", "font": "#e6edf7", "edge": "#718096"},
+        "light": {"background": "#f8fafc", "border": "#cbd5e1", "font": "#172033", "edge": "#64748b"},
+    }[st.session_state.get("theme", "dark")]
     nodes = [{"id": n["id"], "label": n["text"], "title": n["title"], "shape": "dot", "size": 16,
-              "color": COLORS.get(n["label"], "#999"), "font": {"color": "#e6e6e6", "size": 12}}
+              "color": COLORS.get(n["label"], "#999"), "font": {"color": graph_palette["font"], "size": 12}}
              for n in graph["nodes"]]
     edges = [{"from": e["from"], "to": e["to"], "label": e["label"], "arrows": "to",
-              "font": {"size": 9, "color": "#9aa4b2", "strokeWidth": 0}, "color": {"color": "#5b6573"}}
+              "font": {"size": 9, "color": graph_palette["edge"], "strokeWidth": 0}, "color": {"color": graph_palette["edge"]}}
              for e in graph["edges"]]
     return f"""
-    <div id="g" style="height:{height - 10}px;border:1px solid #333;border-radius:8px;background:#0e1117"></div>
+    <div id="g" style="height:{height - 10}px;border:1px solid {graph_palette['border']};border-radius:8px;background:{graph_palette['background']}"></div>
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
     <script>
       const network = new vis.Network(document.getElementById('g'),
@@ -147,8 +231,9 @@ def open_explore(question=None):
 
 
 def toggle_theme():
-    """Switch between the light and dark appearance presets."""
-    st.session_state["dark_mode"] = not st.session_state["dark_mode"]
+    """Fix 3: persist the requested appearance, then redraw with its CSS palette."""
+    st.session_state["theme"] = "light" if st.session_state["theme"] == "dark" else "dark"
+    st.rerun()
 
 
 def select_page(page):
@@ -159,10 +244,11 @@ def select_page(page):
 def render_top_navigation():
     """Render the persistent website-style header and return the selected view."""
     pages = ["Home", "Explore Knowledge", "Graph Schema", "About & Demo"]
-    with st.container():
+    with st.container(key="top_nav"):
         brand, navigation, appearance = st.columns([1.8, 5.2, 0.45], vertical_alignment="center")
-        brand.markdown("**:material/account_tree: Company Brain**")
-        with navigation.container(horizontal=True, horizontal_alignment="center", wrap=False,
+        with brand.container(key="nav_brand"):
+            st.markdown("**:material/account_tree: Company Brain**")
+        with navigation.container(key="nav_links", horizontal=True, horizontal_alignment="center", wrap=False,
                                   vertical_alignment="center"):
             for item in pages:
                 st.button(
@@ -172,16 +258,17 @@ def render_top_navigation():
                     on_click=select_page,
                     args=(item,),
                 )
-        icon = ":material/light_mode:" if st.session_state["dark_mode"] else ":material/dark_mode:"
-        title = "Switch to light mode" if st.session_state["dark_mode"] else "Switch to dark mode"
-        appearance.button(icon, key="theme_toggle", help=title, type="tertiary", on_click=toggle_theme)
+        icon = ":material/light_mode:" if st.session_state["theme"] == "dark" else ":material/dark_mode:"
+        title = "Switch to light mode" if st.session_state["theme"] == "dark" else "Switch to dark mode"
+        with appearance.container(key="nav_theme", horizontal_alignment="right"):
+            st.button(icon, key="theme_toggle", help=title, type="tertiary", on_click=toggle_theme)
     st.divider()
     return st.session_state["page_navigation"]
 
 
-st.session_state.setdefault("dark_mode", True)
+st.session_state.setdefault("theme", "dark")
 st.session_state.setdefault("page_navigation", "Home")
-apply_theme(st.session_state["dark_mode"])
+apply_theme(st.session_state["theme"])
 
 
 # ------------------------------------------------------------------ sidebar
