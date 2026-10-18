@@ -118,6 +118,16 @@ expertise queries.
 dataset.py -> ingest.py -> FalkorDB <- tools.py (Cypher) <- agent.py (LLM tool calling) <- app.py (Streamlit)
 ```
 
+## Shared incident memory and MCP
+
+The Track 2 workflow stores incident investigation findings and handoffs in FalkorDB. The **Incident Investigator**
+creates an `Incident` and `Memory` node. The **Response Coordinator** reads that shared context, receives a
+`Handoff`, and can create a linked follow-up ticket. This survives page reloads and can be continued later.
+
+The same operations are available through `mcp_server.py` for any MCP-compatible agent. After installing the
+requirements, run `mcp dev mcp_server.py` to inspect the tools: system impact analysis, investigation, memory
+reading, handoff, and follow-up coordination.
+
 If you remove FalkorDB the app has nothing to answer from: the LLM has no company knowledge of its own and
 is instructed to use only tool results.
 

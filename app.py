@@ -45,6 +45,23 @@ def legend():
     return " ".join(f"<span style='color:{c}'>●</span> {k}" for k, c in COLORS.items())
 
 
+def add_incident_message(heading, result):
+    """Add a persisted multi-agent workflow update to the main chat."""
+    data = result["data"]
+    content = (
+        f"### {heading}: `{data['id']}`\n\n"
+        f"**System:** {data['system']} · **Status:** {data['status']}\n\n"
+        f"**Shared memories:** {len(data['memories'])} · **Handoffs:** {len(data['handoffs'])} · "
+        f"**Follow-up tickets:** {len(data['tickets'])}\n\n"
+        "Open **How I got this** to see the shared incident graph and its handoff path."
+    )
+    st.session_state.setdefault("messages", []).append({
+        "role": "assistant", "content": content,
+        "trace": [{"tool": "incident_context", "args": {"incident_id": data["id"]},
+                   "cypher": result["cypher"]}],
+        "graph": result["graph"]})
+
+
 @st.cache_resource
 def boot():
     """Connect and auto-load the demo data the first time."""
@@ -145,6 +162,45 @@ with st.sidebar:
                         st.error(f"Could not create follow-up ticket: {e}")
         else:
             st.warning("No active owner is available for this system.")
+
+    with st.expander("Track 2: shared incident memory and handoff"):
+        st.caption("The Investigator saves findings in FalkorDB. The Coordinator reads the same memory later.")
+        coordination_systems = [row[0] for row in g.query("MATCH (s:System) RETURN s.name ORDER BY s.name").result_set]
+        coordination_system = st.selectbox("System to investigate", coordination_systems, key="coordination_system")
+        if st.button("Investigator: save graph findings", use_container_width=True):
+            try:
+                result = tools.start_incident_investigation(coordination_system)
+                add_incident_message("Investigator saved shared memory", result)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not start investigation: {e}")
+
+        incidents = tools.list_incidents()
+        if incidents:
+            choices = {f"{item['id']} · {item['system']} · {item['status']}": item["id"] for item in incidents}
+            selected_label = st.selectbox("Continue a shared incident", list(choices), key="shared_incident")
+            incident_id = choices[selected_label]
+            current = tools.incident_context(incident_id)["data"]
+            st.write(f"**Saved memory:** {len(current['memories'])} finding(s) · "
+                     f"**handoffs:** {len(current['handoffs'])} · "
+                     f"**tickets:** {len(current['tickets'])}")
+            with st.form("handoff_incident"):
+                handoff_note = st.text_area("Handoff note", value="Investigation complete; please coordinate recovery.")
+                if st.form_submit_button("Investigator: hand off to Coordinator"):
+                    try:
+                        result = tools.handoff_incident(incident_id, handoff_note)
+                        add_incident_message("Investigator handed off the incident", result)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not hand off incident: {e}")
+            if not current["tickets"]:
+                if st.button("Coordinator: create recommended follow-up", use_container_width=True):
+                    try:
+                        result = tools.coordinator_create_followup(incident_id)
+                        add_incident_message("Coordinator used shared memory and created follow-up", result)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not create coordinated follow-up: {e}")
 
     if st.button("Reset demo data"):
         ingest()

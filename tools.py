@@ -408,6 +408,108 @@ def knowledge_risk():
 
 
 # ------------------------------------------------- write path (used by the UI form, not by the LLM)
+AGENT_ROLES = (
+    ("AGENT-INVESTIGATOR", "Incident Investigator", "Finds impact and saves incident findings."),
+    ("AGENT-COORDINATOR", "Response Coordinator", "Reads handoffs and creates recovery work."),
+)
+
+
+def _ensure_coordination_agents(g):
+    for agent_id, name, role in AGENT_ROLES:
+        g.query("MERGE (a:Agent {id:$id}) SET a.name=$name, a.role=$role",
+                {"id": agent_id, "name": name, "role": role})
+
+
+def _next_id(g, label, prefix):
+    count = g.query(f"MATCH (n:{label}) RETURN count(n)").result_set[0][0]
+    return f"{prefix}-{count + 1}"
+
+
+def incident_context(incident_id):
+    """Read shared memory, handoffs, tickets and graph paths for one incident."""
+    ctx = Ctx()
+    rows = ctx.run("MATCH p=(i:Incident {id:$id})-[:CONCERNS]->(s:System) RETURN i.status, s.name, p",
+                   id=incident_id)
+    if not rows:
+        return ctx.result({"error": f"No incident with id {incident_id}."})
+    memories = [{"agent": r[0], "id": r[1], "text": r[2]} for r in ctx.run(
+        "MATCH p=(a:Agent)-[:WROTE]->(m:Memory)-[:ABOUT]->(i:Incident {id:$id}) "
+        "RETURN a.name, m.id, m.text, p ORDER BY m.id", id=incident_id)]
+    handoffs = [{"from": r[0], "to": r[1], "note": r[2]} for r in ctx.run(
+        "MATCH p=(a:Agent)-[:HANDED_OFF]->(h:Handoff)-[:FOR_INCIDENT]->(i:Incident {id:$id}), "
+        "(h)-[:TO]->(b:Agent) RETURN a.name, b.name, h.note, p ORDER BY h.id", id=incident_id)]
+    tickets = [{"id": r[0], "title": r[1], "status": r[2]} for r in ctx.run(
+        "MATCH p=(i:Incident {id:$id})-[:HAS_TICKET]->(t:Ticket) RETURN t.id, t.title, t.status, p",
+        id=incident_id)]
+    return ctx.result({"id": incident_id, "status": rows[0][0], "system": rows[0][1],
+                       "memories": memories, "handoffs": handoffs, "tickets": tickets})
+
+
+def start_incident_investigation(system):
+    """Investigator agent stores graph-derived incident findings as shared memory."""
+    plan = incident_response(system)["data"]
+    if "error" in plan:
+        raise ValueError(plan["error"])
+    g = get_graph()
+    _ensure_coordination_agents(g)
+    incident_id, memory_id = _next_id(g, "Incident", "INC"), _next_id(g, "Memory", "MEM")
+    affected = ", ".join(plan["affected_systems"]) or "no downstream systems"
+    summary = f"Investigated {plan['system']}: affected systems are {affected}. " \
+              f"Recommended priority is {plan['recommended_action']['priority']}."
+    g.query("MATCH (s:System {name:$system}), (a:Agent {id:'AGENT-INVESTIGATOR'}) "
+            "CREATE (i:Incident {id:$incident, status:'investigating'})-[:CONCERNS]->(s) "
+            "CREATE (m:Memory {id:$memory, text:$text, kind:'investigation'}) "
+            "CREATE (a)-[:WROTE]->(m)-[:ABOUT]->(i)",
+            {"system": plan["system"], "incident": incident_id, "memory": memory_id, "text": summary})
+    return incident_context(incident_id)
+
+
+def handoff_incident(incident_id, note="Investigation complete; please coordinate recovery."):
+    """Persist a handoff from the investigator agent to the response coordinator."""
+    g = get_graph()
+    _ensure_coordination_agents(g)
+    if not g.query("MATCH (i:Incident {id:$id}) RETURN i", {"id": incident_id}).result_set:
+        raise ValueError(f"No incident with id {incident_id}.")
+    handoff_id = _next_id(g, "Handoff", "HANDOFF")
+    g.query("MATCH (i:Incident {id:$incident}), (a:Agent {id:'AGENT-INVESTIGATOR'}), "
+            "(b:Agent {id:'AGENT-COORDINATOR'}) "
+            "SET i.status='handed_off' "
+            "CREATE (h:Handoff {id:$id, note:$note}) "
+            "CREATE (a)-[:HANDED_OFF]->(h)-[:FOR_INCIDENT]->(i) "
+            "CREATE (h)-[:TO]->(b)", {"incident": incident_id, "id": handoff_id, "note": note})
+    return incident_context(incident_id)
+
+
+def coordinator_create_followup(incident_id):
+    """Coordinator reads shared incident memory and creates the recommended ticket."""
+    context = incident_context(incident_id)["data"]
+    if "error" in context:
+        raise ValueError(context["error"])
+    if context["tickets"]:
+        return incident_context(incident_id)
+    plan = incident_response(context["system"])["data"]["recommended_action"]
+    if not plan["suggested_assignee"]:
+        raise ValueError("No active owner is available for this incident.")
+    ticket = create_incident_followup(context["system"], plan["title"], plan["suggested_assignee"], plan["priority"])
+    g = get_graph()
+    memory_id = _next_id(g, "Memory", "MEM")
+    text = f"Read shared investigation memory and created {ticket['id']} for {ticket['assignee']}."
+    g.query("MATCH (i:Incident {id:$incident}), (t:Ticket {id:$ticket}), "
+            "(a:Agent {id:'AGENT-COORDINATOR'}) SET i.status='responding' "
+            "MERGE (i)-[:HAS_TICKET]->(t) "
+            "CREATE (m:Memory {id:$memory, text:$text, kind:'coordination'}) "
+            "CREATE (a)-[:WROTE]->(m)-[:ABOUT]->(i)",
+            {"incident": incident_id, "ticket": ticket["id"], "memory": memory_id, "text": text})
+    return incident_context(incident_id)
+
+
+def list_incidents():
+    """List persisted incidents so a later session can continue their handoff."""
+    rows = get_graph().query("MATCH (i:Incident)-[:CONCERNS]->(s:System) "
+                             "RETURN i.id, i.status, s.name ORDER BY i.id DESC").result_set
+    return [{"id": row[0], "status": row[1], "system": row[2]} for row in rows]
+
+
 def create_incident_followup(system, title, assignee, priority="high", date=None):
     """Create a graph-backed incident follow-up ticket after user confirmation in the UI."""
     if priority not in ("medium", "high", "critical"):
