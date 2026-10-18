@@ -4,7 +4,11 @@ An agent that understands how a (fictional) company, **Nimbus Labs**, works. Peo
 projects, documents, tickets, chat messages and decisions live in one **FalkorDB** graph. The agent can
 only learn facts by running graph queries, and every answer shows the Cypher it ran and the path it followed.
 
-Built for **Graph Hacks (FalkorDB x WeMakeDevs), Track 3: Company Brain**.
+Built for **Graph Hacks (FalkorDB x WeMakeDevs)**. This submission enters:
+
+- **Track 1: Agents That Act on Connected Data** — graph-guided incident response creates follow-up tickets.
+- **Track 2: Agent Memory and Coordination** — two roles save, hand off, and reuse incident context in FalkorDB.
+- **Track 3: Company Brain** — answer company questions with graph evidence.
 
 ## What it can answer
 
@@ -32,6 +36,10 @@ uploading an existing record updates its fields and relationships instead of cre
 (Decision)-[:DECIDED_BY]->(Person)     (Decision)-[:CONCERNS]->(System|Project)
 (Decision)-[:SOURCED_FROM]->(Document|Ticket|Message)
 (Decision)-[:SUPERSEDES]->(Decision)
+(Incident)-[:CONCERNS]->(System)       (Incident)-[:HAS_TICKET]->(Ticket)
+(Agent)-[:WROTE]->(Memory)-[:ABOUT]->(Incident)
+(Agent)-[:HANDED_OFF]->(Handoff)-[:FOR_INCIDENT]->(Incident)
+(Handoff)-[:TO]->(Agent)
 ```
 
 About 75 nodes and 176 relationships, all synthetic (see `dataset.py`).
@@ -54,6 +62,15 @@ WITH shortestPath((x)-[*..6]->(y)) AS p RETURN p, length(p)
 
 -- critical systems
 CALL algo.pageRank('System', 'DEPENDS_ON') YIELD node, score RETURN node.name, score ORDER BY score DESC
+
+-- shared incident memory for the Coordinator
+MATCH (a:Agent)-[:WROTE]->(m:Memory)-[:ABOUT]->(i:Incident {id:$id})
+RETURN a.name, m.id, m.text ORDER BY m.id
+
+-- handoff from Investigator to Coordinator
+MATCH (a:Agent)-[:HANDED_OFF]->(h:Handoff)-[:FOR_INCIDENT]->(i:Incident {id:$id}),
+      (h)-[:TO]->(b:Agent)
+RETURN a.name, b.name, h.note
 ```
 
 ## Run it
@@ -127,6 +144,16 @@ creates an `Incident` and `Memory` node. The **Response Coordinator** reads that
 The same operations are available through `mcp_server.py` for any MCP-compatible agent. After installing the
 requirements, run `mcp dev mcp_server.py` to inspect the tools: system impact analysis, investigation, memory
 reading, handoff, and follow-up coordination.
+
+## Track demos
+
+- **Track 1:** Choose a failed system in **Respond to a system incident**. The graph finds dependent systems,
+  owners, and active responders, then stores the confirmed follow-up ticket and its relationships.
+- **Track 2:** In **Track 2: shared incident memory and handoff**, save an Investigator finding, hand it to the
+  Coordinator, and create a follow-up ticket. The `Incident`, `Memory`, `Handoff`, and `Ticket` remain in
+  FalkorDB after a page refresh.
+- **Track 3:** Ask a question in the chat. Each answer is based on graph queries, and **How I got this** shows
+  the Cypher and graph path used.
 
 If you remove FalkorDB the app has nothing to answer from: the LLM has no company knowledge of its own and
 is instructed to use only tool results.
