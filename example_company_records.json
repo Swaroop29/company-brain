@@ -1,0 +1,35 @@
+[
+  {
+    "type": "Ticket",
+    "id": "T-200",
+    "title": "Add alerting for delayed event-bus messages",
+    "status": "open",
+    "assignee": "Aisha Rahman",
+    "created": "2026-10-18",
+    "affects": ["event-bus"]
+  },
+  {
+    "type": "Document",
+    "id": "D-200",
+    "title": "Event-bus alerting runbook",
+    "kind": "runbook",
+    "date": "2026-10-18",
+    "author": "Aisha Rahman",
+    "summary": "Use this runbook when delayed messages or failed consumers affect the event bus.",
+    "about": [
+      {"label": "System", "name": "event-bus"},
+      {"label": "System", "name": "payments-service"}
+    ]
+  },
+  {
+    "type": "Message",
+    "id": "M-200",
+    "channel": "#platform-alerts",
+    "author": "Aisha Rahman",
+    "date": "2026-10-18",
+    "text": "The event-bus alerting runbook is ready. Please use it for delayed-message incidents.",
+    "mentions": [
+      {"label": "System", "name": "event-bus"}
+    ]
+  }
+]
