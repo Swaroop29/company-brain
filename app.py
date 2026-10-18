@@ -395,11 +395,21 @@ def render_home():
     second.metric("Connected relationships", r)
     third.metric("Evidence source", "FalkorDB")
     st.markdown("### Start here")
-    st.markdown("""
-    - **Explore Knowledge** to ask questions such as _Who owns the event bus?_ or _What breaks if it fails?_
-    - **Graph Schema** to see the data model and relationships behind each answer.
-    - **About & Demo** for the incident, shared-memory, and MCP workflows.
-    """)
+    st.caption("Open the sidebar with the arrow at the upper left to use the sample questions and workflows below.")
+    top_row = st.columns(2, gap="large")
+    bottom_row = st.columns(2, gap="large")
+    quick_starts = [
+        (top_row[0], "Ask a question", "Try a sample question from the sidebar or ask anything about Nimbus Labs in Explore Knowledge."),
+        (top_row[1], "Keep knowledge current", "Log a decision or import Documents, Tickets, and Messages from the sidebar."),
+        (bottom_row[0], "Respond to an incident", "Use graph impact and ownership evidence to create a persistent follow-up ticket."),
+        (bottom_row[1], "Coordinate agents", "Run the Investigator and Response Coordinator through shared incident memory and a handoff."),
+    ]
+    for column, heading, description in quick_starts:
+        with column:
+            with st.container(border=True):
+                st.markdown(f"#### {heading}")
+                st.write(description)
+                st.caption("Available from the sidebar")
     st.button("Explore the knowledge graph", type="primary", on_click=open_explore)
     st.caption("Every factual answer is based on a graph query. Open **How I got this** in a response to inspect its Cypher and evidence path.")
 
