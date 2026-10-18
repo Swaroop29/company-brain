@@ -105,6 +105,66 @@ def legend():
     return " ".join(f"<span style='color:{c}'>●</span> {k}" for k, c in COLORS.items())
 
 
+def schema_graph(scope):
+    """Return a small, interactive visual version of the static FalkorDB schema."""
+    descriptions = {
+        "person": ("Person", "People who work at Nimbus Labs"),
+        "team": ("Team", "Teams that own systems"),
+        "system_a": ("System", "A company system"),
+        "system_b": ("System", "A system that depends on another system"),
+        "project": ("Project", "A project that uses a system"),
+        "document": ("Document", "Documentation and RFCs"),
+        "ticket": ("Ticket", "A support or engineering ticket"),
+        "message": ("Message", "A chat message"),
+        "decision": ("Decision", "A recorded company decision"),
+        "incident": ("Incident", "A shared incident record"),
+        "agent": ("Agent", "An Investigator or Response Coordinator"),
+        "memory": ("Message", "Persisted agent memory"),
+        "handoff": ("Message", "A handoff between agents"),
+    }
+    edges = [
+        ("person", "team", "MEMBER_OF"), ("team", "system_a", "OWNS"),
+        ("system_a", "system_b", "DEPENDS_ON"), ("person", "project", "LEADS"),
+        ("project", "system_a", "USES"), ("person", "document", "AUTHORED"),
+        ("document", "system_a", "ABOUT"), ("document", "project", "ABOUT"),
+        ("ticket", "person", "ASSIGNED_TO"), ("ticket", "system_a", "AFFECTS"),
+        ("person", "message", "POSTED"), ("message", "system_a", "MENTIONS"),
+        ("message", "project", "MENTIONS"), ("decision", "person", "DECIDED_BY"),
+        ("decision", "system_a", "CONCERNS"), ("decision", "project", "CONCERNS"),
+        ("decision", "document", "SOURCED_FROM"), ("decision", "ticket", "SOURCED_FROM"),
+        ("decision", "message", "SOURCED_FROM"), ("incident", "system_a", "CONCERNS"),
+        ("incident", "ticket", "HAS_TICKET"), ("agent", "memory", "WROTE"),
+        ("memory", "incident", "ABOUT"), ("agent", "handoff", "HANDED_OFF"),
+        ("handoff", "incident", "FOR_INCIDENT"),
+    ]
+    scopes = {
+        "All connections": set(descriptions),
+        "Company knowledge": {"person", "team", "system_a", "system_b", "project", "document", "ticket", "message", "decision"},
+        "Incidents & agents": {"person", "system_a", "ticket", "incident", "agent", "memory", "handoff"},
+    }
+    visible = scopes[scope]
+    display_names = {"system_b": "Dependent system", "memory": "Memory", "handoff": "Handoff"}
+    nodes = [{"id": node_id, "text": display_names.get(node_id, label), "title": description, "label": label}
+             for node_id, (label, description) in descriptions.items() if node_id in visible]
+    return {
+        "nodes": nodes,
+        "edges": [{"from": source, "to": target, "label": relation}
+                  for source, target, relation in edges if source in visible and target in visible],
+    }
+
+
+SCHEMA_RELATIONSHIPS = {
+    "Ownership and dependencies": ("MEMBER_OF · OWNS · DEPENDS_ON", "People belong to teams; teams own systems; systems can depend on other systems.",
+                                    "(Person)-[:MEMBER_OF]->(Team)-[:OWNS]->(System)-[:DEPENDS_ON]->(System)"),
+    "Projects and knowledge": ("LEADS · USES · AUTHORED · ABOUT", "People lead projects and author documents that describe systems or projects.",
+                               "(Person)-[:LEADS]->(Project)-[:USES]->(System)\n(Person)-[:AUTHORED]->(Document)-[:ABOUT]->(System|Project)"),
+    "Tickets, messages and decisions": ("ASSIGNED_TO · AFFECTS · POSTED · MENTIONS · SOURCED_FROM", "Operational records connect work, conversations, and decisions to the people and systems involved.",
+                                         "(Ticket)-[:ASSIGNED_TO]->(Person)  (Ticket)-[:AFFECTS]->(System)\n(Decision)-[:SOURCED_FROM]->(Document|Ticket|Message)"),
+    "Incident memory": ("CONCERNS · HAS_TICKET · WROTE · HANDED_OFF", "Agents store findings and handoffs against an incident, so another role can continue with shared context.",
+                        "(Incident)-[:CONCERNS]->(System)  (Incident)-[:HAS_TICKET]->(Ticket)\n(Agent)-[:WROTE]->(Memory)-[:ABOUT]->(Incident)"),
+}
+
+
 def add_incident_message(heading, result):
     """Add a persisted multi-agent workflow update to the main chat."""
     data = result["data"]
@@ -373,17 +433,27 @@ def render_home():
 
 def render_schema():
     st.title("Graph Schema")
-    st.caption("This is the connected data model Company Brain queries in FalkorDB.")
-    st.code("""(Person)-[:MEMBER_OF]->(Team)-[:OWNS]->(System)-[:DEPENDS_ON]->(System)
-(Person)-[:LEADS]->(Project)-[:USES]->(System)
-(Person)-[:AUTHORED]->(Document)-[:ABOUT]->(System|Project)
-(Ticket)-[:ASSIGNED_TO]->(Person)      (Ticket)-[:AFFECTS]->(System)
-(Person)-[:POSTED]->(Message)-[:MENTIONS]->(System|Project)
-(Decision)-[:DECIDED_BY]->(Person)     (Decision)-[:CONCERNS]->(System|Project)
-(Decision)-[:SOURCED_FROM]->(Document|Ticket|Message)
-(Incident)-[:CONCERNS]->(System)       (Incident)-[:HAS_TICKET]->(Ticket)
-(Agent)-[:WROTE]->(Memory)-[:ABOUT]->(Incident)
-(Agent)-[:HANDED_OFF]->(Handoff)-[:FOR_INCIDENT]->(Incident)""", language="text")
+    st.caption("Explore the connected FalkorDB model that Company Brain queries. Drag nodes, zoom, and hover for details.")
+    scope = st.segmented_control(
+        "Schema view",
+        ["All connections", "Company knowledge", "Incidents & agents"],
+        default="All connections",
+        required=True,
+        key="schema_scope",
+    )
+    st.markdown(legend(), unsafe_allow_html=True)
+    components.html(graph_html(schema_graph(scope), height=470), height=480)
+
+    st.markdown("### Relationship explorer")
+    selected = st.selectbox("Choose a part of the model", list(SCHEMA_RELATIONSHIPS), key="schema_relationship")
+    relationships, explanation, pattern = SCHEMA_RELATIONSHIPS[selected]
+    details, cypher = st.columns([1.2, 1])
+    with details:
+        st.markdown(f"**{relationships}**")
+        st.write(explanation)
+    with cypher:
+        st.code(pattern, language="text")
+
     st.markdown("### How the graph helps")
     st.markdown("""
     - **Impact analysis** follows dependency edges to find what a failed system affects.
