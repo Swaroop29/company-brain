@@ -125,12 +125,13 @@ with st.sidebar:
 
     with st.expander("Import or update company records"):
         st.caption("Upload a JSON list of Documents, Tickets, or Messages. An existing id is updated in place.")
+        st.markdown("**Format example only** — this template is not added to the graph unless you upload a file and select **Import selected records**.")
         st.code('''[
   {"type":"Ticket","id":"T-200","title":"Event bus outage","status":"open",
    "assignee":"Priya Nair","created":"2026-10-17","affects":["event-bus"]}
 ]''', language="json")
         uploaded = st.file_uploader("JSON file", type="json", key="company_records")
-        if uploaded and st.button("Import records", width="stretch"):
+        if uploaded and st.button("Import selected records", width="stretch"):
             try:
                 payload = json.loads(uploaded.getvalue().decode("utf-8"))
                 records = payload.get("records") if isinstance(payload, dict) else payload
