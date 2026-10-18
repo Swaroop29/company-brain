@@ -151,21 +151,32 @@ def toggle_theme():
     st.session_state["dark_mode"] = not st.session_state["dark_mode"]
 
 
+def select_page(page):
+    """Select one view from the top navigation bar."""
+    st.session_state["page_navigation"] = page
+
+
 def render_top_navigation():
     """Render the persistent website-style header and return the selected view."""
-    with st.container(border=True):
+    pages = ["Home", "Explore Knowledge", "Graph Schema", "About & Demo"]
+    with st.container():
         brand, navigation, appearance = st.columns([1.8, 5.2, 0.45], vertical_alignment="center")
         brand.markdown("**:material/account_tree: Company Brain**")
-        page = navigation.segmented_control(
-            "Navigate",
-            ["Home", "Explore Knowledge", "Graph Schema", "About & Demo"],
-            key="page_navigation",
-            label_visibility="collapsed",
-        )
+        with navigation.container(horizontal=True, horizontal_alignment="center", wrap=False,
+                                  vertical_alignment="center"):
+            for item in pages:
+                st.button(
+                    item,
+                    key=f"nav_{item.lower().replace(' ', '_').replace('&', 'and')}",
+                    type="primary" if st.session_state["page_navigation"] == item else "tertiary",
+                    on_click=select_page,
+                    args=(item,),
+                )
         icon = ":material/light_mode:" if st.session_state["dark_mode"] else ":material/dark_mode:"
         title = "Switch to light mode" if st.session_state["dark_mode"] else "Switch to dark mode"
         appearance.button(icon, key="theme_toggle", help=title, type="tertiary", on_click=toggle_theme)
-    return page
+    st.divider()
+    return st.session_state["page_navigation"]
 
 
 st.session_state.setdefault("dark_mode", True)
