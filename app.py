@@ -36,9 +36,12 @@ def graph_html(graph, height=430):
     <div id="g" style="height:{height - 10}px;border:1px solid #333;border-radius:8px;background:#0e1117"></div>
     <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
     <script>
-      new vis.Network(document.getElementById('g'),
+      const network = new vis.Network(document.getElementById('g'),
         {{nodes: new vis.DataSet({json.dumps(nodes)}), edges: new vis.DataSet({json.dumps(edges)})}},
         {{physics: {{stabilization: true, barnesHut: {{springLength: 120}}}}, interaction: {{hover: true}}}});
+      network.once('stabilizationIterationsDone', function () {{
+        network.fit({{animation: false}});
+      }});
     </script>"""
 
 def legend():
