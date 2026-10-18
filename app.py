@@ -195,6 +195,11 @@ def select_page(page):
     st.session_state["page_navigation"] = page
 
 
+def prepare_sidebar_workflow(workflow):
+    """Keep the selected sidebar workflow open after a visitor expands the sidebar."""
+    st.session_state["sidebar_workflow"] = workflow
+
+
 def render_top_navigation():
     """Render the persistent website-style header and return the selected view."""
     pages = ["Home", "Explore Knowledge", "Graph Schema", "About & Demo"]
@@ -247,7 +252,8 @@ with st.sidebar:
     for q in EXAMPLES:
         st.button(q, width="stretch", on_click=open_explore, args=(q,))
 
-    with st.expander("Log a new decision (keeps the graph current)"):
+    with st.expander("Log a new decision (keeps the graph current)",
+                     expanded=st.session_state.get("sidebar_workflow") == "decision"):
         people = [r[0] for r in g.query("MATCH (p:Person {status:'active'}) RETURN p.name ORDER BY p.name").result_set]
         systems = [r[0] for r in g.query("MATCH (s) WHERE s:System OR s:Project RETURN s.name ORDER BY s.name").result_set]
         decs = [""] + [f"{r[0]}: {r[1]}" for r in g.query("MATCH (d:Decision) RETURN d.id, d.title ORDER BY d.id").result_set]
@@ -261,7 +267,8 @@ with st.sidebar:
                 new_id = tools.add_decision(title, why, by, about, replaces.split(":")[0] if replaces else None)
                 st.success(f"Added {new_id}. Ask the agent about it.")
 
-    with st.expander("Import or update company records"):
+    with st.expander("Import or update company records",
+                     expanded=st.session_state.get("sidebar_workflow") == "import"):
         st.caption("Upload a JSON list of Documents, Tickets, or Messages. An existing id is updated in place.")
         st.markdown("**Format example only** — this template is not added to the graph unless you upload a file and select **Import selected records**.")
         st.code('''[
@@ -281,7 +288,8 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"Import failed: {e}")
 
-    with st.expander("Respond to a system incident"):
+    with st.expander("Respond to a system incident",
+                     expanded=st.session_state.get("sidebar_workflow") == "incident"):
         st.caption("The graph suggests an owner and priority. Review the plan, then create the follow-up ticket.")
         incident_systems = [row[0] for row in g.query("MATCH (s:System) RETURN s.name ORDER BY s.name").result_set]
         incident_system = st.selectbox("Affected system", incident_systems, key="incident_system")
@@ -337,7 +345,8 @@ with st.sidebar:
         else:
             st.warning("No active owner is available for this system.")
 
-    with st.expander("Track 2: shared incident memory and handoff"):
+    with st.expander("Track 2: shared incident memory and handoff",
+                     expanded=st.session_state.get("sidebar_workflow") == "coordination"):
         st.caption("Two separate role prompts work from graph evidence. Their reports, handoff and ticket persist in FalkorDB.")
         coordination_systems = [row[0] for row in g.query("MATCH (s:System) RETURN s.name ORDER BY s.name").result_set]
         coordination_system = st.selectbox("System to investigate", coordination_systems, key="coordination_system")
@@ -399,18 +408,33 @@ def render_home():
     top_row = st.columns(2, gap="large")
     bottom_row = st.columns(2, gap="large")
     quick_starts = [
-        (top_row[0], "Ask a question", "Try a sample question from the sidebar or ask anything about Nimbus Labs in Explore Knowledge."),
-        (top_row[1], "Keep knowledge current", "Log a decision or import Documents, Tickets, and Messages from the sidebar."),
-        (bottom_row[0], "Respond to an incident", "Use graph impact and ownership evidence to create a persistent follow-up ticket."),
-        (bottom_row[1], "Coordinate agents", "Run the Investigator and Response Coordinator through shared incident memory and a handoff."),
+        (top_row[0], "Ask a question", "Try a sample question from the sidebar or ask anything about Nimbus Labs in Explore Knowledge.",
+         [("Open Explore Knowledge", open_explore, ())]),
+        (top_row[1], "Keep knowledge current", "Log a decision or import Documents, Tickets, and Messages from the sidebar.",
+         [("Log a decision", prepare_sidebar_workflow, ("decision",)),
+          ("Import records", prepare_sidebar_workflow, ("import",))]),
+        (bottom_row[0], "Respond to an incident", "Use graph impact and ownership evidence to create a persistent follow-up ticket.",
+         [("Open incident workflow", prepare_sidebar_workflow, ("incident",))]),
+        (bottom_row[1], "Coordinate agents", "Run the Investigator and Response Coordinator through shared incident memory and a handoff.",
+         [("Open coordination workflow", prepare_sidebar_workflow, ("coordination",))]),
     ]
-    for column, heading, description in quick_starts:
+    for column, heading, description, actions in quick_starts:
         with column:
             with st.container(border=True):
                 st.markdown(f"#### {heading}")
                 st.write(description)
-                st.caption("Available from the sidebar")
-    st.button("Explore the knowledge graph", type="primary", on_click=open_explore)
+                for button_text, callback, args in actions:
+                    st.button(button_text, key=f"quick_start_{heading.lower().replace(' ', '_')}_{button_text.lower().replace(' ', '_')}",
+                              type="primary", width="stretch", on_click=callback, args=args)
+    selected_workflow = st.session_state.get("sidebar_workflow")
+    if selected_workflow:
+        labels = {
+            "decision": "Log a new decision (keeps the graph current)",
+            "import": "Import or update company records",
+            "incident": "Respond to a system incident",
+            "coordination": "Track 2: shared incident memory and handoff",
+        }
+        st.info(f"**{labels[selected_workflow]}** is ready. Open the sidebar with the upper-left arrow to continue.")
     st.caption("Every factual answer is based on a graph query. Open **How I got this** in a response to inspect its Cypher and evidence path.")
 
 
