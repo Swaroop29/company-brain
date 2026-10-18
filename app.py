@@ -53,6 +53,13 @@ def apply_theme(dark_mode):
         font-size: 1.35rem; font-weight: 750; line-height: 1.1; margin: 0; color: {palette['text']}; }}
       .st-key-team_brand [data-testid="stCaptionContainer"] {{ margin-top: 0.15rem; }}
       .st-key-team_menu button {{ font-size: 0.95rem; font-weight: 600; }}
+      /* Compact actions inside the Home quick-start cards. */
+      .stApp [class*="st-key-quick_start"] button {{
+        min-height: 2.1rem;
+        padding: 0.28rem 0.78rem;
+        font-size: 0.84rem;
+        border-radius: 0.45rem;
+      }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -404,7 +411,7 @@ def render_home():
     second.metric("Connected relationships", r)
     third.metric("Evidence source", "FalkorDB")
     st.markdown("### Start here")
-    st.caption("Open the sidebar with the arrow at the upper left to use the sample questions and workflows below.")
+    st.caption("Open the sidebar with the arrow at the upper left to use the sample questions and workflows below. A card prepares its matching workflow for you.")
     top_row = st.columns(2, gap="large")
     bottom_row = st.columns(2, gap="large")
     quick_starts = [
@@ -425,7 +432,8 @@ def render_home():
                 st.write(description)
                 for button_text, callback, args in actions:
                     st.button(button_text, key=f"quick_start_{heading.lower().replace(' ', '_')}_{button_text.lower().replace(' ', '_')}",
-                              type="primary", width="stretch", on_click=callback, args=args)
+                              type="primary", width="content", icon=":material/arrow_forward:",
+                              on_click=callback, args=args)
     selected_workflow = st.session_state.get("sidebar_workflow")
     if selected_workflow:
         labels = {
@@ -434,7 +442,7 @@ def render_home():
             "incident": "Respond to a system incident",
             "coordination": "Track 2: shared incident memory and handoff",
         }
-        st.info(f"**{labels[selected_workflow]}** is ready. Open the sidebar with the upper-left arrow to continue.")
+        st.info(f"**{labels[selected_workflow]}** is ready. Open the sidebar with the upper-left arrow; its section will already be expanded.")
     st.caption("Every factual answer is based on a graph query. Open **How I got this** in a response to inspect its Cypher and evidence path.")
 
 
