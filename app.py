@@ -486,26 +486,57 @@ def render_about():
     st.write("Company Brain is a synthetic Nimbus Labs demo for Graph Hacks. FalkorDB is the central store for company knowledge, graph evidence, incident state, agent memory, and follow-up actions.")
 
     st.markdown("### Three connected tracks")
-    with st.container(border=True):
-        st.markdown("#### Track 1 · Agents That Act on Connected Data")
-        st.write("When a system fails, the agent follows ownership, dependency, project, and ticket relationships in FalkorDB. It identifies the impact and can create a persistent follow-up ticket.")
-        st.markdown("**What to demonstrate**")
-        st.markdown("1. Open **Respond to a system incident** and choose `event-bus` or `data-warehouse`.  \n2. Review the graph-derived systems, projects, owners, and open tickets.  \n3. Create the follow-up ticket, then run the impact lookup again to show that the new ticket is now part of the graph evidence.")
-        st.caption("Why the graph matters: removing FalkorDB removes the dependency paths and the action cannot produce graph-grounded impact or persist its result.")
+    st.caption("Select a track to reveal its proof flow. All three use the same live FalkorDB knowledge graph.")
+    tracks = {
+        "track_1": {
+            "number": "TRACK 01", "title": "Agents That Act on Connected Data",
+            "summary": "The agent follows graph connections, determines incident impact, and creates a follow-up ticket.",
+            "focus": ["Multi-hop impact reasoning", "Graph queries as tools", "MCP-ready tool interface", "Actions from graph evidence", "Explainable results"],
+            "demo": "1. Open **Respond to a system incident** and choose `event-bus` or `data-warehouse`.  \n2. Review the graph-derived systems, projects, owners, and open tickets.  \n3. Create the follow-up ticket, then run the impact lookup again to show that the new ticket is part of the graph evidence.",
+            "why": "The graph supplies the dependency paths and stores the new ticket, so future agent results change.",
+        },
+        "track_2": {
+            "number": "TRACK 02", "title": "Agent Memory and Coordination",
+            "summary": "Two agent roles save findings, hand off context, and coordinate through one shared incident graph.",
+            "focus": ["Persistent incident memory", "Shared state and handoffs", "Separate agent responsibilities", "Read and write graph context", "Durable follow-up work"],
+            "demo": "1. Open **Track 2: shared incident memory and handoff** and start an investigation.  \n2. Show the Investigator's saved findings and handoff in **How I got this**.  \n3. Run the Response Coordinator, then show the connected memories, handoff, and ticket.",
+            "why": "The `Incident`, `Memory`, `Handoff`, `Agent`, and `Ticket` relationships let roles continue work from shared durable context.",
+        },
+        "track_3": {
+            "number": "TRACK 03", "title": "Company Brain",
+            "summary": "The app answers company questions across people, teams, systems, work records, and decisions.",
+            "focus": ["Docs, tickets, and chats", "Who owns and knows what", "Decision source tracing", "Live knowledge updates", "Evidence-backed answers"],
+            "demo": "1. Ask a question in **Explore Knowledge**, then open **How I got this**.  \n2. Log a decision or import a JSON record.  \n3. Open **Graph Schema** and search for the changed record to inspect its live properties and connections.",
+            "why": "Answers come from connected graph paths and every record can be updated and explored in FalkorDB.",
+        },
+    }
+    st.session_state.setdefault("about_track", "track_1")
+    cards = st.columns(3, gap="large")
+    for column, (track_id, track) in zip(cards, tracks.items()):
+        with column:
+            with st.container(border=True):
+                st.caption(track["number"])
+                st.markdown(f"#### {track['title']}")
+                st.write(track["summary"])
+                st.caption("KEY FOCUS")
+                st.markdown("\n".join(f"- {item}" for item in track["focus"]))
+                if st.button(
+                    "View track details",
+                    key=f"select_{track_id}",
+                    type="primary" if st.session_state["about_track"] == track_id else "secondary",
+                    width="stretch",
+                ):
+                    st.session_state["about_track"] = track_id
 
+    selected = tracks[st.session_state["about_track"]]
+    st.markdown("### Track proof flow")
     with st.container(border=True):
-        st.markdown("#### Track 2 · Agent Memory and Coordination")
-        st.write("Two roles collaborate through shared FalkorDB state. The Incident Investigator discovers graph impact and saves a report. The Response Coordinator reads the saved incident context and handoff, then decides on the follow-up work.")
+        st.caption(selected["number"])
+        st.subheader(selected["title"])
+        st.write(selected["summary"])
         st.markdown("**What to demonstrate**")
-        st.markdown("1. Open **Track 2: shared incident memory and handoff** and start an investigation.  \n2. Show the Investigator's saved findings and handoff in **How I got this**.  \n3. Run the Response Coordinator to create a ticket from the saved context, then show the memories, handoff, and ticket connected to the same incident.")
-        st.caption("Why the graph matters: the agents share durable incident context through `Incident`, `Memory`, `Handoff`, `Agent`, and `Ticket` relationships.")
-
-    with st.container(border=True):
-        st.markdown("#### Track 3 · Company Brain")
-        st.write("The app answers questions about Nimbus Labs by joining people, teams, systems, projects, documents, tickets, messages, and decisions. Every answer can show the Cypher and graph evidence behind it.")
-        st.markdown("**What to demonstrate**")
-        st.markdown("1. Ask a question in **Explore Knowledge**, then open **How I got this**.  \n2. Log a decision or import a JSON record to keep the company knowledge current.  \n3. Open **Graph Schema** and search for the changed record to inspect its live properties and direct connections.")
-        st.caption("Why the graph matters: facts are discovered through connected paths, rather than a fixed list of answers or a decorative visualization.")
+        st.markdown(selected["demo"])
+        st.info(f"**Why FalkorDB matters:** {selected['why']}")
 
     st.markdown("### Suggested demo order")
     st.markdown("1. Reset demo data.  \n2. Show Track 3 with a company question and graph evidence.  \n3. Show Track 1 by creating a ticket and proving it changes future results.  \n4. Show Track 2 with Investigator → handoff → Coordinator.  \n5. Finish in Graph Schema by searching for the ticket or incident created during the demo.")
