@@ -17,7 +17,7 @@ Built for **Graph Hacks (FalkorDB x WeMakeDevs)**. This submission enters:
 - **Graph Schema** shows the nodes and relationships queried by the app.
 - **About & Demo** describes the three Graph Hacks workflows and a suggested demo path.
 
-Use the **Dark mode** switch in the sidebar to choose the interface appearance. The graph evidence view keeps a dark canvas so node colours and labels remain easy to read.
+Use the sun/moon button in the top bar to choose the interface appearance. The graph evidence view keeps a dark canvas so node colours and labels remain easy to read.
 
 ## What it can answer
 

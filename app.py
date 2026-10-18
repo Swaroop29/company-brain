@@ -146,15 +146,37 @@ def open_explore(question=None):
         st.session_state["pending"] = question
 
 
+def toggle_theme():
+    """Switch between the light and dark appearance presets."""
+    st.session_state["dark_mode"] = not st.session_state["dark_mode"]
+
+
+def render_top_navigation():
+    """Render the persistent website-style header and return the selected view."""
+    with st.container(border=True):
+        brand, navigation, appearance = st.columns([1.8, 5.2, 0.45], vertical_alignment="center")
+        brand.markdown("**:material/account_tree: Company Brain**")
+        page = navigation.segmented_control(
+            "Navigate",
+            ["Home", "Explore Knowledge", "Graph Schema", "About & Demo"],
+            key="page_navigation",
+            label_visibility="collapsed",
+        )
+        icon = ":material/light_mode:" if st.session_state["dark_mode"] else ":material/dark_mode:"
+        title = "Switch to light mode" if st.session_state["dark_mode"] else "Switch to dark mode"
+        appearance.button(icon, key="theme_toggle", help=title, type="tertiary", on_click=toggle_theme)
+    return page
+
+
+st.session_state.setdefault("dark_mode", True)
+st.session_state.setdefault("page_navigation", "Home")
+apply_theme(st.session_state["dark_mode"])
+
+
 # ------------------------------------------------------------------ sidebar
 with st.sidebar:
     st.title("🧠 Company Brain")
     st.caption("Nimbus Labs knowledge graph on FalkorDB")
-    page = st.radio("Navigate", ["Home", "Explore Knowledge", "Graph Schema", "About & Demo"],
-                    key="page_navigation")
-    if "dark_mode" not in st.session_state:
-        st.session_state["dark_mode"] = True
-    st.toggle("Dark mode", key="dark_mode")
     try:
         boot()
         g = get_graph()
@@ -305,7 +327,7 @@ with st.sidebar:
         st.rerun()
 
 # ------------------------------------------------------------------ pages
-apply_theme(st.session_state["dark_mode"])
+page = render_top_navigation()
 
 
 def render_home():
