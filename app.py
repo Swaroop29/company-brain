@@ -430,10 +430,18 @@ def render_home():
             with st.container(border=True):
                 st.markdown(f"#### {heading}")
                 st.write(description)
-                for button_text, callback, args in actions:
-                    st.button(button_text, key=f"quick_start_{heading.lower().replace(' ', '_')}_{button_text.lower().replace(' ', '_')}",
-                              type="primary", width="content", icon=":material/arrow_forward:",
-                              on_click=callback, args=args)
+                action_columns = st.columns(len(actions)) if len(actions) > 1 else [st.container()]
+                for action_column, (button_text, callback, args) in zip(action_columns, actions):
+                    with action_column:
+                        st.button(
+                            button_text,
+                            key=f"quick_start_{heading.lower().replace(' ', '_')}_{button_text.lower().replace(' ', '_')}",
+                            type="primary",
+                            width="stretch" if len(actions) > 1 else "content",
+                            icon=":material/arrow_forward:",
+                            on_click=callback,
+                            args=args,
+                        )
     selected_workflow = st.session_state.get("sidebar_workflow")
     if selected_workflow:
         labels = {
