@@ -538,9 +538,10 @@ def render_about():
         st.markdown(selected["demo"])
         st.info(f"**Why FalkorDB matters:** {selected['why']}")
 
-    st.markdown("### Suggested demo order")
-    st.markdown("1. Reset demo data.  \n2. Show Track 3 with a company question and graph evidence.  \n3. Show Track 1 by creating a ticket and proving it changes future results.  \n4. Show Track 2 with Investigator → handoff → Coordinator.  \n5. Finish in Graph Schema by searching for the ticket or incident created during the demo.")
-    st.caption("All demo data is synthetic. Use **Reset demo data and workflow records** before recording a clean demo.")
+    with st.expander("For the hackathon demo"):
+        st.markdown("### Demo recording guide")
+        st.markdown("1. Reset demo data.  \n2. Show Track 3 with a company question and graph evidence.  \n3. Show Track 1 by creating a ticket and proving it changes future results.  \n4. Show Track 2 with Investigator → handoff → Coordinator.  \n5. Finish in Graph Schema by searching for the ticket or incident created during the demo.")
+        st.caption("All demo data is synthetic. Use **Reset demo data and workflow records** before recording a clean demo.")
 
 
 def render_trace(message):
