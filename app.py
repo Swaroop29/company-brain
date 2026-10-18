@@ -23,6 +23,12 @@ EXAMPLES = [
     "Which systems are the most critical?",
 ]
 
+# Add each member's exact public LinkedIn URL here when it is available.
+TEAM_MEMBERS = [
+    {"name": "Swaroop Patil", "linkedin": ""},
+    {"name": "Sarvesh Patil", "linkedin": ""},
+]
+
 
 def apply_theme(dark_mode):
     """Apply a simple app-wide light or dark palette without changing the graph evidence canvas."""
@@ -42,6 +48,11 @@ def apply_theme(dark_mode):
         background: {palette['panel']}; border-color: {palette['border']}; }}
       .stApp input, .stApp textarea, .stApp [data-baseweb="select"] > div {{
         background: {palette['panel']}; color: {palette['text']}; border-color: {palette['border']}; }}
+      /* Team Terminator branding and the compact team menu in the top bar. */
+      .st-key-team_brand [data-testid="stMarkdownContainer"] p {{
+        font-size: 1.35rem; font-weight: 750; line-height: 1.1; margin: 0; color: {palette['text']}; }}
+      .st-key-team_brand [data-testid="stCaptionContainer"] {{ margin-top: 0.15rem; }}
+      .st-key-team_menu button {{ font-size: 0.95rem; font-weight: 600; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -160,8 +171,10 @@ def render_top_navigation():
     """Render the persistent website-style header and return the selected view."""
     pages = ["Home", "Explore Knowledge", "Graph Schema", "About & Demo"]
     with st.container():
-        brand, navigation, appearance = st.columns([1.8, 5.2, 0.45], vertical_alignment="center")
-        brand.markdown("**:material/account_tree: Company Brain**")
+        brand, navigation, team, appearance = st.columns([2.25, 4.8, 1.0, 0.45], vertical_alignment="center")
+        with brand.container(key="team_brand"):
+            st.markdown("**:material/account_tree: Team Terminator**")
+            st.caption("Company Brain")
         with navigation.container(horizontal=True, horizontal_alignment="center", wrap=False,
                                   vertical_alignment="center"):
             for item in pages:
@@ -172,6 +185,13 @@ def render_top_navigation():
                     on_click=select_page,
                     args=(item,),
                 )
+        with team.container(key="team_menu"):
+            with st.popover("Team", icon=":material/groups:", type="tertiary", help="Meet Team Terminator"):
+                st.markdown("**Team Terminator**")
+                for member in TEAM_MEMBERS:
+                    st.markdown(f":material/person: **{member['name']}**")
+                    if member["linkedin"]:
+                        st.link_button("LinkedIn", member["linkedin"], icon=":material/linkedin:")
         icon = ":material/light_mode:" if st.session_state["dark_mode"] else ":material/dark_mode:"
         title = "Switch to light mode" if st.session_state["dark_mode"] else "Switch to dark mode"
         appearance.button(icon, key="theme_toggle", help=title, type="tertiary", on_click=toggle_theme)
