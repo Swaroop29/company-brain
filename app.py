@@ -105,52 +105,25 @@ def legend():
     return " ".join(f"<span style='color:{c}'>●</span> {k}" for k, c in COLORS.items())
 
 
-def schema_graph(scope):
-    """Return a small, interactive visual version of the static FalkorDB schema."""
-    descriptions = {
-        "person": ("Person", "People who work at Nimbus Labs"),
-        "team": ("Team", "Teams that own systems"),
-        "system_a": ("System", "A company system"),
-        "system_b": ("System", "A system that depends on another system"),
-        "project": ("Project", "A project that uses a system"),
-        "document": ("Document", "Documentation and RFCs"),
-        "ticket": ("Ticket", "A support or engineering ticket"),
-        "message": ("Message", "A chat message"),
-        "decision": ("Decision", "A recorded company decision"),
-        "incident": ("Incident", "A shared incident record"),
-        "agent": ("Agent", "An Investigator or Response Coordinator"),
-        "memory": ("Message", "Persisted agent memory"),
-        "handoff": ("Message", "A handoff between agents"),
-    }
-    edges = [
-        ("person", "team", "MEMBER_OF"), ("team", "system_a", "OWNS"),
-        ("system_a", "system_b", "DEPENDS_ON"), ("person", "project", "LEADS"),
-        ("project", "system_a", "USES"), ("person", "document", "AUTHORED"),
-        ("document", "system_a", "ABOUT"), ("document", "project", "ABOUT"),
-        ("ticket", "person", "ASSIGNED_TO"), ("ticket", "system_a", "AFFECTS"),
-        ("person", "message", "POSTED"), ("message", "system_a", "MENTIONS"),
-        ("message", "project", "MENTIONS"), ("decision", "person", "DECIDED_BY"),
-        ("decision", "system_a", "CONCERNS"), ("decision", "project", "CONCERNS"),
-        ("decision", "document", "SOURCED_FROM"), ("decision", "ticket", "SOURCED_FROM"),
-        ("decision", "message", "SOURCED_FROM"), ("incident", "system_a", "CONCERNS"),
-        ("incident", "ticket", "HAS_TICKET"), ("agent", "memory", "WROTE"),
-        ("memory", "incident", "ABOUT"), ("agent", "handoff", "HANDED_OFF"),
-        ("handoff", "incident", "FOR_INCIDENT"),
-    ]
-    scopes = {
-        "All connections": set(descriptions),
-        "Company knowledge": {"person", "team", "system_a", "system_b", "project", "document", "ticket", "message", "decision"},
-        "Incidents & agents": {"person", "system_a", "ticket", "incident", "agent", "memory", "handoff"},
-    }
-    visible = scopes[scope]
-    display_names = {"system_b": "Dependent system", "memory": "Memory", "handoff": "Handoff"}
-    nodes = [{"id": node_id, "text": display_names.get(node_id, label), "title": description, "label": label}
-             for node_id, (label, description) in descriptions.items() if node_id in visible]
-    return {
-        "nodes": nodes,
-        "edges": [{"from": source, "to": target, "label": relation}
-                  for source, target, relation in edges if source in visible and target in visible],
-    }
+def graph_records():
+    """Read compact node records for the visual explorer from the live FalkorDB graph."""
+    records = []
+    for (node,) in get_graph().query("MATCH (n) RETURN n").result_set:
+        properties = dict(node.properties or {})
+        label = node.labels[0] if node.labels else "Node"
+        name = properties.get("name") or properties.get("title") or properties.get("text") or properties.get("id") or label
+        records.append({"graph_id": node.id, "type": label, "key": properties.get("id") or properties.get("name") or str(node.id),
+                        "name": str(name), "properties": properties})
+    return sorted(records, key=lambda record: (record["type"], record["name"].lower()))
+
+
+def graph_neighborhood(graph_id):
+    """Read one selected node and its immediate graph evidence for the explorer."""
+    ctx = tools.Ctx()
+    rows = ctx.run("MATCH (n) WHERE ID(n) = $graph_id RETURN n", graph_id=graph_id)
+    if rows:
+        ctx.run("MATCH p=(n)-[r]-(m) WHERE ID(n) = $graph_id RETURN p LIMIT 20", graph_id=graph_id)
+    return ctx.result({})
 
 
 SCHEMA_RELATIONSHIPS = {
@@ -432,35 +405,80 @@ def render_home():
 
 
 def render_schema():
-    st.title("Graph Schema")
-    st.caption("Explore the connected FalkorDB model that Company Brain queries. Drag nodes, zoom, and hover for details.")
-    scope = st.segmented_control(
-        "Schema view",
-        ["All connections", "Company knowledge", "Incidents & agents"],
-        default="All connections",
-        required=True,
-        key="schema_scope",
-    )
-    st.markdown(legend(), unsafe_allow_html=True)
-    components.html(graph_html(schema_graph(scope), height=470), height=480)
+    st.title("Knowledge Graph Explorer")
+    st.caption("Browse real FalkorDB records, inspect their properties, and trace the connections around each one.")
 
-    st.markdown("### Relationship explorer")
-    selected = st.selectbox("Choose a part of the model", list(SCHEMA_RELATIONSHIPS), key="schema_relationship")
-    relationships, explanation, pattern = SCHEMA_RELATIONSHIPS[selected]
-    details, cypher = st.columns([1.2, 1])
-    with details:
+    records = graph_records()
+    relationship_count = get_graph().query("MATCH ()-[r]->() RETURN count(r)").result_set[0][0]
+    types = sorted({record["type"] for record in records})
+    summary = st.columns(4)
+    summary[0].metric("Graph nodes", len(records))
+    summary[1].metric("Relationships", relationship_count)
+    summary[2].metric("Node types", len(types))
+    summary[3].metric("Data source", "FalkorDB")
+
+    browser, detail = st.columns([1, 1.15], gap="large")
+    with browser:
+        st.markdown("### Browse nodes")
+        selected_type = st.selectbox("Node type", ["All types", *types], key="explorer_type")
+        search = st.text_input("Search by name or ID", placeholder="e.g. event-bus, Aisha, T-105", key="explorer_search")
+        filtered = [
+            record for record in records
+            if (selected_type == "All types" or record["type"] == selected_type)
+            and search.lower() in f"{record['name']} {record['key']}".lower()
+        ]
+        if not filtered:
+            st.info("No records match those filters.")
+            return
+
+        labels = []
+        record_by_label = {}
+        for record in filtered:
+            name = record["name"] if len(record["name"]) <= 58 else f"{record['name'][:55]}..."
+            label = f"[{record['type']}] {name} · {record['key']}"
+            labels.append(label)
+            record_by_label[label] = record
+        default = next((index for index, label in enumerate(labels) if "event-bus" in label.lower()), 0)
+        selected_label = st.selectbox("Select a record", labels, index=default)
+        selected = record_by_label[selected_label]
+        st.caption(f"Showing {len(filtered)} of {len(records)} graph records")
+
+    with detail:
+        st.markdown("### Selected node")
+        st.subheader(selected["name"])
+        st.caption(f"{selected['type']} · {selected['key']}")
+        property_rows = []
+        for key, value in selected["properties"].items():
+            display_value = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+            property_rows.append({"Property": key.replace("_", " ").title(), "Value": display_value})
+        st.dataframe(property_rows or [{"Property": "Graph ID", "Value": selected["graph_id"]}],
+                     hide_index=True, use_container_width=True, height=265)
+
+    neighborhood = graph_neighborhood(selected["graph_id"])
+    graph = neighborhood["graph"]
+    st.markdown("### Relationship map")
+    st.caption("A focused view of the selected record and its direct graph connections. Drag nodes, zoom, and hover for details.")
+    st.markdown(legend(), unsafe_allow_html=True)
+    components.html(graph_html(graph, height=410), height=420)
+
+    st.markdown("### Connected relationships")
+    names = {node["id"]: node["text"] for node in graph["nodes"]}
+    edge_rows = [
+        {"From": names.get(edge["from"], str(edge["from"])), "Relationship": edge["label"],
+         "To": names.get(edge["to"], str(edge["to"]))}
+        for edge in graph["edges"]
+    ]
+    if edge_rows:
+        st.dataframe(edge_rows, hide_index=True, use_container_width=True)
+    else:
+        st.info("This record has no direct relationships yet.")
+
+    with st.expander("Schema vocabulary"):
+        schema_part = st.selectbox("Choose a relationship group", list(SCHEMA_RELATIONSHIPS), key="schema_relationship")
+        relationships, explanation, pattern = SCHEMA_RELATIONSHIPS[schema_part]
         st.markdown(f"**{relationships}**")
         st.write(explanation)
-    with cypher:
         st.code(pattern, language="text")
-
-    st.markdown("### How the graph helps")
-    st.markdown("""
-    - **Impact analysis** follows dependency edges to find what a failed system affects.
-    - **Knowledge lookup** connects people with the documents, tickets, decisions, and messages they contributed.
-    - **Incident coordination** persists reports, handoffs, and tickets as shared graph memory.
-    - **Open questions** use a validated read-only Cypher fallback, with the generated query shown in the trace.
-    """)
 
 
 def render_about():
