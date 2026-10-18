@@ -483,16 +483,32 @@ def render_schema():
 
 def render_about():
     st.title("About Company Brain")
-    st.write("Company Brain is a synthetic Nimbus Labs demo built for Graph Hacks using FalkorDB as its central data store.")
-    st.markdown("### What you can do")
-    st.markdown("""
-    1. **Ask company questions** and inspect the graph evidence behind each answer.
-    2. **Keep knowledge current** by logging a decision or importing documents, tickets, and messages.
-    3. **Respond to an incident** with graph-derived impact, ownership, and a persistent follow-up ticket.
-    4. **Coordinate an incident** as two roles that store reports and handoffs in shared FalkorDB memory.
-    """)
-    st.markdown("### Demo path")
-    st.markdown("Ask _What breaks if the event bus goes down?_, create the proposed follow-up ticket, then open **How I got this** to see the graph change. Next, run the Investigator and Response Coordinator from the sidebar.")
+    st.write("Company Brain is a synthetic Nimbus Labs demo for Graph Hacks. FalkorDB is the central store for company knowledge, graph evidence, incident state, agent memory, and follow-up actions.")
+
+    st.markdown("### Three connected tracks")
+    with st.container(border=True):
+        st.markdown("#### Track 1 · Agents That Act on Connected Data")
+        st.write("When a system fails, the agent follows ownership, dependency, project, and ticket relationships in FalkorDB. It identifies the impact and can create a persistent follow-up ticket.")
+        st.markdown("**What to demonstrate**")
+        st.markdown("1. Open **Respond to a system incident** and choose `event-bus` or `data-warehouse`.  \n2. Review the graph-derived systems, projects, owners, and open tickets.  \n3. Create the follow-up ticket, then run the impact lookup again to show that the new ticket is now part of the graph evidence.")
+        st.caption("Why the graph matters: removing FalkorDB removes the dependency paths and the action cannot produce graph-grounded impact or persist its result.")
+
+    with st.container(border=True):
+        st.markdown("#### Track 2 · Agent Memory and Coordination")
+        st.write("Two roles collaborate through shared FalkorDB state. The Incident Investigator discovers graph impact and saves a report. The Response Coordinator reads the saved incident context and handoff, then decides on the follow-up work.")
+        st.markdown("**What to demonstrate**")
+        st.markdown("1. Open **Track 2: shared incident memory and handoff** and start an investigation.  \n2. Show the Investigator's saved findings and handoff in **How I got this**.  \n3. Run the Response Coordinator to create a ticket from the saved context, then show the memories, handoff, and ticket connected to the same incident.")
+        st.caption("Why the graph matters: the agents share durable incident context through `Incident`, `Memory`, `Handoff`, `Agent`, and `Ticket` relationships.")
+
+    with st.container(border=True):
+        st.markdown("#### Track 3 · Company Brain")
+        st.write("The app answers questions about Nimbus Labs by joining people, teams, systems, projects, documents, tickets, messages, and decisions. Every answer can show the Cypher and graph evidence behind it.")
+        st.markdown("**What to demonstrate**")
+        st.markdown("1. Ask a question in **Explore Knowledge**, then open **How I got this**.  \n2. Log a decision or import a JSON record to keep the company knowledge current.  \n3. Open **Graph Schema** and search for the changed record to inspect its live properties and direct connections.")
+        st.caption("Why the graph matters: facts are discovered through connected paths, rather than a fixed list of answers or a decorative visualization.")
+
+    st.markdown("### Suggested demo order")
+    st.markdown("1. Reset demo data.  \n2. Show Track 3 with a company question and graph evidence.  \n3. Show Track 1 by creating a ticket and proving it changes future results.  \n4. Show Track 2 with Investigator → handoff → Coordinator.  \n5. Finish in Graph Schema by searching for the ticket or incident created during the demo.")
     st.caption("All demo data is synthetic. Use **Reset demo data and workflow records** before recording a clean demo.")
 
 
