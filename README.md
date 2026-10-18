@@ -10,6 +10,13 @@ Built for **Graph Hacks (FalkorDB x WeMakeDevs)**. This submission enters:
 - **Track 2: Agent Memory and Coordination** — two roles save, hand off, and reuse incident context in FalkorDB.
 - **Track 3: Company Brain** — answer company questions with graph evidence.
 
+## Live demo
+
+**Try Company Brain:** [terminatorcompanybrain.streamlit.app](https://terminatorcompanybrain.streamlit.app/)
+
+The public demo runs on Streamlit Community Cloud and connects to a managed FalkorDB Cloud instance. Its
+Nimbus Labs records are synthetic and the graph seeds automatically when the Cloud graph is empty.
+
 ## App pages
 
 - **Home** explains the product and provides quick-start actions for asking questions, updating knowledge, responding to an incident, and coordinating agents.
@@ -113,6 +120,25 @@ Prerequisites: Python, Docker Desktop, and an API key for Groq or Gemini.
 5. Optional graph checks: `python ingest.py` rebuilds the graph from the synthetic dataset, and `python smoke_test.py` exercises the graph tools.
 
 Explore the raw graph at http://localhost:3000 (FalkorDB Browser, graph `companybrain`).
+
+### Deploy to Streamlit Community Cloud
+
+The repository is deployed from `main` with `app.py` as its entry point. Create a FalkorDB Cloud instance,
+then add these values under **App settings → Secrets** in Streamlit Community Cloud:
+
+```toml
+LLM_PROVIDER = "groq"
+GROQ_API_KEY = "your-key"
+FALKORDB_HOST = "your-falkordb-cloud-host"
+FALKORDB_PORT = "your-falkordb-cloud-port"
+FALKORDB_USERNAME = "your-falkordb-user"
+FALKORDB_PASSWORD = "your-falkordb-password"
+FALKORDB_SSL = "false" # set true only when the FalkorDB Cloud connection requires TLS
+GRAPH_NAME = "companybrain"
+```
+
+Secrets stay in Streamlit Cloud and must never be committed to Git. Use the exact host, port, and TLS setting
+shown in the FalkorDB Cloud Connectivity panel.
 
 ### Keep the graph current
 
