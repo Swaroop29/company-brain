@@ -10,6 +10,15 @@ Built for **Graph Hacks (FalkorDB x WeMakeDevs)**. This submission enters:
 - **Track 2: Agent Memory and Coordination** — two roles save, hand off, and reuse incident context in FalkorDB.
 - **Track 3: Company Brain** — answer company questions with graph evidence.
 
+## App pages
+
+- **Home** explains the product and gives a clear starting point for a first-time visitor.
+- **Explore Knowledge** is the chat workspace for company questions and graph evidence.
+- **Graph Schema** shows the nodes and relationships queried by the app.
+- **About & Demo** describes the three Graph Hacks workflows and a suggested demo path.
+
+Use the **Dark mode** switch in the sidebar to choose the interface appearance. The graph evidence view keeps a dark canvas so node colours and labels remain easy to read.
+
 ## What it can answer
 
 | Question | Graph work |

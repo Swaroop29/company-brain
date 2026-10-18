@@ -24,6 +24,28 @@ EXAMPLES = [
 ]
 
 
+def apply_theme(dark_mode):
+    """Apply a simple app-wide light or dark palette without changing the graph evidence canvas."""
+    if dark_mode:
+        palette = {"app": "#0e1117", "sidebar": "#171b26", "text": "#f3f4f6",
+                   "muted": "#aab4c3", "panel": "#202633", "border": "#3a4352"}
+    else:
+        palette = {"app": "#f8fafc", "sidebar": "#ffffff", "text": "#172033",
+                   "muted": "#516174", "panel": "#ffffff", "border": "#d6deea"}
+    st.markdown(f"""
+    <style>
+      .stApp {{ background: {palette['app']}; color: {palette['text']}; }}
+      [data-testid="stSidebar"] {{ background: {palette['sidebar']}; border-right: 1px solid {palette['border']}; }}
+      [data-testid="stSidebar"] *, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp li {{ color: {palette['text']}; }}
+      .stApp [data-testid="stCaptionContainer"] *, .stApp small {{ color: {palette['muted']}; }}
+      .stApp [data-testid="stExpander"], .stApp [data-testid="stChatMessage"] {{
+        background: {palette['panel']}; border-color: {palette['border']}; }}
+      .stApp input, .stApp textarea, .stApp [data-baseweb="select"] > div {{
+        background: {palette['panel']}; color: {palette['text']}; border-color: {palette['border']}; }}
+    </style>
+    """, unsafe_allow_html=True)
+
+
 def graph_html(graph, height=430):
     """Render the original physics-based vis-network graph."""
     nodes = [{"id": n["id"], "label": n["text"], "title": n["title"], "shape": "dot", "size": 16,
@@ -117,10 +139,22 @@ def boot():
     return True
 
 
+def open_explore(question=None):
+    """Navigate to the chat workspace, optionally carrying a starter question."""
+    st.session_state["page_navigation"] = "Explore Knowledge"
+    if question:
+        st.session_state["pending"] = question
+
+
 # ------------------------------------------------------------------ sidebar
 with st.sidebar:
     st.title("🧠 Company Brain")
     st.caption("Nimbus Labs knowledge graph on FalkorDB")
+    page = st.radio("Navigate", ["Home", "Explore Knowledge", "Graph Schema", "About & Demo"],
+                    key="page_navigation")
+    if "dark_mode" not in st.session_state:
+        st.session_state["dark_mode"] = True
+    st.toggle("Dark mode", key="dark_mode")
     try:
         boot()
         g = get_graph()
@@ -133,8 +167,7 @@ with st.sidebar:
 
     st.markdown("**Try a question**")
     for q in EXAMPLES:
-        if st.button(q, width="stretch"):
-            st.session_state["pending"] = q
+        st.button(q, width="stretch", on_click=open_explore, args=(q,))
 
     with st.expander("Log a new decision (keeps the graph current)"):
         people = [r[0] for r in g.query("MATCH (p:Person {status:'active'}) RETURN p.name ORDER BY p.name").result_set]
@@ -271,44 +304,112 @@ with st.sidebar:
         st.session_state.pop("messages", None)
         st.rerun()
 
-# ------------------------------------------------------------------ chat
-st.header("Ask anything about how Nimbus Labs works")
-st.caption("Every answer comes from graph queries. Open 'How I got this' to see the Cypher and the path.")
-
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
+# ------------------------------------------------------------------ pages
+apply_theme(st.session_state["dark_mode"])
 
 
-def render_trace(m):
+def render_home():
+    st.title("Welcome to Company Brain")
+    st.subheader("Find reliable answers from Nimbus Labs' connected company knowledge.")
+    st.info("Company Brain links people, teams, systems, projects, documents, tickets, messages, and decisions in FalkorDB.")
+    first, second, third = st.columns(3)
+    first.metric("Knowledge graph nodes", n)
+    second.metric("Connected relationships", r)
+    third.metric("Evidence source", "FalkorDB")
+    st.markdown("### Start here")
+    st.markdown("""
+    - **Explore Knowledge** to ask questions such as _Who owns the event bus?_ or _What breaks if it fails?_
+    - **Graph Schema** to see the data model and relationships behind each answer.
+    - **About & Demo** for the incident, shared-memory, and MCP workflows.
+    """)
+    st.button("Explore the knowledge graph", type="primary", on_click=open_explore)
+    st.caption("Every factual answer is based on a graph query. Open **How I got this** in a response to inspect its Cypher and evidence path.")
+
+
+def render_schema():
+    st.title("Graph Schema")
+    st.caption("This is the connected data model Company Brain queries in FalkorDB.")
+    st.code("""(Person)-[:MEMBER_OF]->(Team)-[:OWNS]->(System)-[:DEPENDS_ON]->(System)
+(Person)-[:LEADS]->(Project)-[:USES]->(System)
+(Person)-[:AUTHORED]->(Document)-[:ABOUT]->(System|Project)
+(Ticket)-[:ASSIGNED_TO]->(Person)      (Ticket)-[:AFFECTS]->(System)
+(Person)-[:POSTED]->(Message)-[:MENTIONS]->(System|Project)
+(Decision)-[:DECIDED_BY]->(Person)     (Decision)-[:CONCERNS]->(System|Project)
+(Decision)-[:SOURCED_FROM]->(Document|Ticket|Message)
+(Incident)-[:CONCERNS]->(System)       (Incident)-[:HAS_TICKET]->(Ticket)
+(Agent)-[:WROTE]->(Memory)-[:ABOUT]->(Incident)
+(Agent)-[:HANDED_OFF]->(Handoff)-[:FOR_INCIDENT]->(Incident)""", language="text")
+    st.markdown("### How the graph helps")
+    st.markdown("""
+    - **Impact analysis** follows dependency edges to find what a failed system affects.
+    - **Knowledge lookup** connects people with the documents, tickets, decisions, and messages they contributed.
+    - **Incident coordination** persists reports, handoffs, and tickets as shared graph memory.
+    - **Open questions** use a validated read-only Cypher fallback, with the generated query shown in the trace.
+    """)
+
+
+def render_about():
+    st.title("About Company Brain")
+    st.write("Company Brain is a synthetic Nimbus Labs demo built for Graph Hacks using FalkorDB as its central data store.")
+    st.markdown("### What you can do")
+    st.markdown("""
+    1. **Ask company questions** and inspect the graph evidence behind each answer.
+    2. **Keep knowledge current** by logging a decision or importing documents, tickets, and messages.
+    3. **Respond to an incident** with graph-derived impact, ownership, and a persistent follow-up ticket.
+    4. **Coordinate an incident** as two roles that store reports and handoffs in shared FalkorDB memory.
+    """)
+    st.markdown("### Demo path")
+    st.markdown("Ask _What breaks if the event bus goes down?_, create the proposed follow-up ticket, then open **How I got this** to see the graph change. Next, run the Investigator and Response Coordinator from the sidebar.")
+    st.caption("All demo data is synthetic. Use **Reset demo data and workflow records** before recording a clean demo.")
+
+
+def render_trace(message):
     with st.expander("How I got this: tools, Cypher and graph", expanded=False):
-        if m.get("graph", {}).get("nodes"):
+        if message.get("graph", {}).get("nodes"):
             st.markdown(legend(), unsafe_allow_html=True)
-            components.html(graph_html(m["graph"]), height=440)
-        for step in m.get("trace", []):
+            components.html(graph_html(message["graph"]), height=440)
+        for step in message.get("trace", []):
             st.markdown(f"**Tool:** `{step['tool']}({json.dumps(step['args'])})`")
-            for c in step["cypher"]:
-                st.code(c, language="cypher")
+            for cypher in step["cypher"]:
+                st.code(cypher, language="cypher")
 
 
-for m in st.session_state["messages"]:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
-        if m["role"] == "assistant":
-            render_trace(m)
+def render_explore():
+    st.header("Explore Nimbus Labs knowledge")
+    st.caption("Ask a company question in plain language. Each answer uses FalkorDB graph evidence.")
+    if "messages" not in st.session_state:
+        st.session_state["messages"] = []
+    for message in st.session_state["messages"]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if message["role"] == "assistant":
+                render_trace(message)
 
-question = st.chat_input("e.g. Why did we choose Kafka?") or st.session_state.pop("pending", None)
-if question:
-    with st.chat_message("user"):
-        st.markdown(question)
-    history = [{"role": m["role"], "content": m["content"]} for m in st.session_state["messages"]]
-    st.session_state["messages"].append({"role": "user", "content": question})
-    with st.chat_message("assistant"):
-        with st.spinner("Walking the graph..."):
-            try:
-                out = agent.ask(question, history)
-                msg = {"role": "assistant", "content": out["answer"], "trace": out["trace"], "graph": out["graph"]}
-            except Exception as e:
-                msg = {"role": "assistant", "content": f"Something went wrong: `{e}`", "trace": [], "graph": {}}
-        st.markdown(msg["content"])
-        render_trace(msg)
-    st.session_state["messages"].append(msg)
+    question = st.chat_input("e.g. How many active people are in the company?") or st.session_state.pop("pending", None)
+    if question:
+        with st.chat_message("user"):
+            st.markdown(question)
+        history = [{"role": message["role"], "content": message["content"]}
+                   for message in st.session_state["messages"]]
+        st.session_state["messages"].append({"role": "user", "content": question})
+        with st.chat_message("assistant"):
+            with st.spinner("Walking the graph..."):
+                try:
+                    out = agent.ask(question, history)
+                    reply = {"role": "assistant", "content": out["answer"], "trace": out["trace"],
+                             "graph": out["graph"]}
+                except Exception as e:
+                    reply = {"role": "assistant", "content": f"Something went wrong: `{e}`", "trace": [], "graph": {}}
+            st.markdown(reply["content"])
+            render_trace(reply)
+        st.session_state["messages"].append(reply)
+
+
+if page == "Home":
+    render_home()
+elif page == "Graph Schema":
+    render_schema()
+elif page == "About & Demo":
+    render_about()
+else:
+    render_explore()
