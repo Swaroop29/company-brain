@@ -25,8 +25,8 @@ EXAMPLES = [
 
 # Add each member's exact public LinkedIn URL here when it is available.
 TEAM_MEMBERS = [
-    {"name": "Swaroop Patil", "linkedin": ""},
-    {"name": "Sarvesh Patil", "linkedin": ""},
+    {"name": "Swaroop Patil", "linkedin": "https://www.linkedin.com/in/swaroop29/"},
+    {"name": "Sarvesh Patil", "linkedin": "https://www.linkedin.com/in/sarveshpatil1007/"},
 ]
 
 
@@ -157,11 +157,6 @@ def open_explore(question=None):
         st.session_state["pending"] = question
 
 
-def toggle_theme():
-    """Switch between the light and dark appearance presets."""
-    st.session_state["dark_mode"] = not st.session_state["dark_mode"]
-
-
 def select_page(page):
     """Select one view from the top navigation bar."""
     st.session_state["page_navigation"] = page
@@ -171,7 +166,7 @@ def render_top_navigation():
     """Render the persistent website-style header and return the selected view."""
     pages = ["Home", "Explore Knowledge", "Graph Schema", "About & Demo"]
     with st.container():
-        brand, navigation, team, appearance = st.columns([2.25, 4.8, 1.0, 0.45], vertical_alignment="center")
+        brand, navigation, team = st.columns([2.25, 5.3, 1.0], vertical_alignment="center")
         with brand.container(key="team_brand"):
             st.markdown("**:material/account_tree: Team Terminator**")
             st.caption("Company Brain")
@@ -191,17 +186,14 @@ def render_top_navigation():
                 for member in TEAM_MEMBERS:
                     st.markdown(f":material/person: **{member['name']}**")
                     if member["linkedin"]:
-                        st.link_button("LinkedIn", member["linkedin"], icon=":material/linkedin:")
-        icon = ":material/light_mode:" if st.session_state["dark_mode"] else ":material/dark_mode:"
-        title = "Switch to light mode" if st.session_state["dark_mode"] else "Switch to dark mode"
-        appearance.button(icon, key="theme_toggle", help=title, type="tertiary", on_click=toggle_theme)
+                        st.link_button("LinkedIn", member["linkedin"], icon=":material/open_in_new:")
     st.divider()
     return st.session_state["page_navigation"]
 
 
-st.session_state.setdefault("dark_mode", True)
 st.session_state.setdefault("page_navigation", "Home")
-apply_theme(st.session_state["dark_mode"])
+# The app has one intentionally consistent dark appearance.
+apply_theme(True)
 
 
 # ------------------------------------------------------------------ sidebar
