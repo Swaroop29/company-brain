@@ -32,6 +32,9 @@ Rules:
   "who knows/can help with...", impact_analysis for "what breaks if...", ownership for "who owns...",
   knowledge_risk for people-who-left questions, incident_response for "what should we do if..." or
   incident follow-up questions, find_connection for "how is X related to Y".
+- For open-ended company questions that need counting, filtering, grouping, listing, or a graph pattern not
+  handled by a dedicated tool, call run_readonly_cypher. It can only run one validated MATCH query and cannot
+  change the graph. Prefer a dedicated tool whenever it gives clearer evidence.
 - Pass concise canonical graph topics to tools (for example, "event bus", not "event bus migration").
 - If a tool reports no match, retry with the key entity or search its exact name before concluding no data exists.
 - If a result names a source id, read it with get_item when the exact wording matters.

@@ -25,6 +25,10 @@ New decisions can be logged from the sidebar, so the graph stays current and old
 Documents, tickets and chat messages can also be imported from a JSON file. Records are matched by `id`, so
 uploading an existing record updates its fields and relationships instead of creating a duplicate.
 
+For questions outside the prepared examples, the agent can generate one validated, read-only Cypher query from
+the graph schema. It can count, filter, group, and list graph evidence, while rejecting every data-changing or
+administrative clause. The exact generated query appears under **How I got this**.
+
 ## Graph data model
 
 ```
@@ -62,6 +66,9 @@ WITH shortestPath((x)-[*..6]->(y)) AS p RETURN p, length(p)
 
 -- critical systems
 CALL algo.pageRank('System', 'DEPENDS_ON') YIELD node, score RETURN node.name, score ORDER BY score DESC
+
+-- generated fallback for an open-ended question
+MATCH (p:Person {status:'active'}) RETURN count(p) AS active_people
 
 -- shared incident memory for the Coordinator
 MATCH (a:Agent)-[:WROTE]->(m:Memory)-[:ABOUT]->(i:Incident {id:$id})

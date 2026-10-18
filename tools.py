@@ -6,6 +6,7 @@ Every tool returns a dict:
   cypher  -> the Cypher queries that ran (shown in the UI as the "how I got this" trace)
 """
 from collections import defaultdict
+import re
 
 from falkordb import Edge, Node, Path
 
@@ -94,7 +95,68 @@ def _not_found(text, labels="System or Project"):
     return {"error": f"No {labels} matching '{text}'. Try the search tool with a keyword."}
 
 
+GRAPH_SCHEMA = """Nodes: Person(name, role, status), Team(name), System(name, criticality),
+Project(name), Document(id, title, kind, date, summary), Ticket(id, title, status, created),
+Message(id, channel, date, text), Decision(id, title, rationale, date), Incident(id, status),
+Memory(id, text, kind), Handoff(id, note), Agent(id, name).
+Relationships: Person-[:MEMBER_OF]->Team, Team-[:OWNS]->System, System-[:DEPENDS_ON]->System,
+Person-[:LEADS]->Project, Project-[:USES]->System, Person-[:AUTHORED]->Document,
+Document-[:ABOUT]->System|Project, Ticket-[:ASSIGNED_TO]->Person, Ticket-[:AFFECTS]->System,
+Person-[:POSTED]->Message, Message-[:MENTIONS]->System|Project, Decision-[:DECIDED_BY]->Person,
+Decision-[:CONCERNS]->System|Project, Decision-[:SOURCED_FROM]->Document|Ticket|Message,
+Decision-[:SUPERSEDES]->Decision."""
+
+_READONLY_FORBIDDEN = re.compile(
+    r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP|FOREACH|LOAD\s+CSV|CALL|UNION|"
+    r"GRANT|DENY|REVOKE|SHOW|TERMINATE|USE)\b|;|//|/\*|\*\s*\]", re.IGNORECASE)
+
+
+def _validate_readonly_cypher(query):
+    """Allow one bounded MATCH query and reject every data-changing or administrative clause."""
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("A Cypher query is required.")
+    query = " ".join(query.strip().split())
+    if len(query) > 1800:
+        raise ValueError("The Cypher query is too long.")
+    if not re.match(r"^(MATCH|OPTIONAL MATCH)\b", query, re.IGNORECASE):
+        raise ValueError("Only read-only MATCH queries are allowed.")
+    if not re.search(r"\bRETURN\b", query, re.IGNORECASE):
+        raise ValueError("A read-only query must include RETURN.")
+    if _READONLY_FORBIDDEN.search(query):
+        raise ValueError("This query contains a blocked clause. Only read-only graph queries are allowed.")
+    limits = re.findall(r"\bLIMIT\s+(\d+)\b", query, re.IGNORECASE)
+    if any(int(limit) > 50 for limit in limits):
+        raise ValueError("Use LIMIT 50 or fewer rows.")
+    return query if limits else f"{query} LIMIT 50"
+
+
+def _query_value(value):
+    """Convert FalkorDB values into JSON-safe evidence for the agent response."""
+    if isinstance(value, Node):
+        return {"labels": list(value.labels), "properties": dict(value.properties or {})}
+    if isinstance(value, Edge):
+        return {"relationship": value.relation, "from": value.src_node, "to": value.dest_node}
+    if isinstance(value, Path):
+        return {"nodes": [_query_value(node) for node in value.nodes()],
+                "relationships": [_query_value(edge) for edge in value.edges()]}
+    if isinstance(value, list):
+        return [_query_value(item) for item in value]
+    return value
+
+
 # ---------------------------------------------------------------- tools
+def run_readonly_cypher(query: str):
+    """Answer an open-ended company question with one validated, bounded read-only Cypher query."""
+    query = _validate_readonly_cypher(query)
+    ctx = Ctx()
+    rows = ctx.run(query)
+    return ctx.result({
+        "rows": [[_query_value(value) for value in row] for row in rows],
+        "row_count": len(rows),
+        "note": "Results come from a validated read-only Cypher query over the company graph.",
+    })
+
+
 def search(keyword: str):
     """Keyword search across names, titles and message text."""
     ctx = Ctx()
@@ -647,7 +709,7 @@ def import_records(records):
 
 
 # ------------------------------------------------- registry + schemas for the LLM
-FUNCTIONS = {f.__name__: f for f in (search, get_item, who_knows, ownership, decision_history,
+FUNCTIONS = {f.__name__: f for f in (run_readonly_cypher, search, get_item, who_knows, ownership, decision_history,
                                      impact_analysis, incident_response, find_connection, key_systems,
                                      knowledge_risk)}
 
@@ -660,6 +722,11 @@ def _fn(name, desc, props=None, required=None):
 
 STR = {"type": "string"}
 TOOL_SCHEMAS = [
+    _fn("run_readonly_cypher", "Use this fallback for an open-ended question that the dedicated tools do not cover. "
+        "Write exactly one Cypher query that starts with MATCH or OPTIONAL MATCH and includes RETURN. "
+        "It may use WHERE, WITH, ORDER BY, SKIP and LIMIT. Never use CREATE, MERGE, DELETE, SET, REMOVE, "
+        "CALL, UNION, LOAD CSV, semicolons or comments. LIMIT is capped at 50. " + GRAPH_SCHEMA,
+        {"query": STR}, ["query"]),
     _fn("search", "Keyword search over names, titles, message text and rationales. Use when unsure what exists.",
         {"keyword": STR}, ["keyword"]),
     _fn("get_item", "Read the full text of a source item by id: document (D3), ticket (T-105), message (M7), "
