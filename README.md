@@ -14,6 +14,8 @@ Built for **Graph Hacks (FalkorDB x WeMakeDevs)**. This submission enters:
 
 **Try Company Brain:** [terminatorcompanybrain.streamlit.app](https://terminatorcompanybrain.streamlit.app/)
 
+**Watch the full demo:** [Company Brain: FalkorDB Graph Hacks Demo](https://app.trupeer.ai/view/GQXOsufUc/company-brain-falkor-db-graph-hacks-demo)
+
 The public demo runs on Streamlit Community Cloud and connects to a managed FalkorDB Cloud instance. Its
 Nimbus Labs records are synthetic and the graph seeds automatically when the Cloud graph is empty.
 
