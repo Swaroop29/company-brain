@@ -40,6 +40,16 @@ Rules:
 - If the tools return nothing useful, say so plainly. Keep answers short and concrete.
 """
 
+INVESTIGATOR_PROMPT = """You are the Incident Investigator for Nimbus Labs.
+You receive verified graph evidence about a system failure. Write a concise incident report for the
+Response Coordinator. Mention affected systems, people or teams to involve, and the recommended priority.
+Use only the supplied evidence. Do not invent facts, use markdown headings, or exceed 120 words."""
+
+COORDINATOR_PROMPT = """You are the Response Coordinator for Nimbus Labs.
+You receive shared incident memory that was saved by the Incident Investigator. Write a concise recovery
+decision for the incident record: state why a follow-up ticket is needed, its suggested owner and priority.
+Use only the supplied graph context. Do not invent facts, use markdown headings, or exceed 120 words."""
+
 
 def _client():
     name = os.getenv("LLM_PROVIDER", "groq" if os.getenv("GROQ_API_KEY") else "gemini").lower()
@@ -99,3 +109,57 @@ def ask(question: str, history=None, max_steps: int = 6):
 
     return {"answer": "I could not finish within the step limit. Try a more specific question.",
             "trace": trace, "graph": {"nodes": list(nodes.values()), "edges": list(edges.values())}}
+
+
+def _role_summary(prompt, evidence, fallback):
+    """Ask one role to summarise verified graph evidence; keep the graph workflow usable without an API key."""
+    try:
+        client, model, _ = _client()
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": "Verified graph evidence:\n" + json.dumps(evidence, default=str)},
+            ],
+            temperature=0.1,
+        )
+        summary = (response.choices[0].message.content or "").strip()
+        if summary:
+            return summary, True
+    except Exception:
+        pass
+    return fallback, False
+
+
+def investigate_incident(system):
+    """Run the Investigator role, then persist its report as shared FalkorDB memory."""
+    evidence = tools.incident_response(system)["data"]
+    if "error" in evidence:
+        raise ValueError(evidence["error"])
+    action = evidence["recommended_action"]
+    fallback = (f"Investigation for {evidence['system']}: affected systems are "
+                f"{', '.join(evidence['affected_systems']) or 'none'}. "
+                f"Involve {action['suggested_assignee'] or 'the system owner'}; "
+                f"recommended priority is {action['priority']}." )
+    report, used_llm = _role_summary(INVESTIGATOR_PROMPT, evidence, fallback)
+    result = tools.start_incident_investigation(system, summary=report)
+    return {"role": "Incident Investigator", "summary": report, "used_llm": used_llm,
+            "result": result, "evidence": evidence}
+
+
+def coordinate_incident(incident_id):
+    """Run the Coordinator role against persisted incident memory, then create its follow-up ticket."""
+    context = tools.incident_context(incident_id)["data"]
+    if "error" in context:
+        raise ValueError(context["error"])
+    if context["tickets"]:
+        return {"role": "Response Coordinator", "summary": "A follow-up ticket already exists for this incident.",
+                "used_llm": False, "result": tools.incident_context(incident_id), "evidence": context}
+    plan = tools.incident_response(context["system"])["data"]["recommended_action"]
+    evidence = {"incident": context, "recommended_action": plan}
+    fallback = (f"Shared investigation findings require follow-up work. Create the {plan['priority']} priority "
+                f"ticket for {plan['suggested_assignee']}: {plan['title']}.")
+    decision, used_llm = _role_summary(COORDINATOR_PROMPT, evidence, fallback)
+    result = tools.coordinator_create_followup(incident_id, decision=decision)
+    return {"role": "Response Coordinator", "summary": decision, "used_llm": used_llm,
+            "result": result, "evidence": evidence}

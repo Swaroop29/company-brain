@@ -445,7 +445,7 @@ def incident_context(incident_id):
                        "memories": memories, "handoffs": handoffs, "tickets": tickets})
 
 
-def start_incident_investigation(system):
+def start_incident_investigation(system, summary=None):
     """Investigator agent stores graph-derived incident findings as shared memory."""
     plan = incident_response(system)["data"]
     if "error" in plan:
@@ -454,8 +454,8 @@ def start_incident_investigation(system):
     _ensure_coordination_agents(g)
     incident_id, memory_id = _next_id(g, "Incident", "INC"), _next_id(g, "Memory", "MEM")
     affected = ", ".join(plan["affected_systems"]) or "no downstream systems"
-    summary = f"Investigated {plan['system']}: affected systems are {affected}. " \
-              f"Recommended priority is {plan['recommended_action']['priority']}."
+    summary = summary or (f"Investigated {plan['system']}: affected systems are {affected}. "
+                          f"Recommended priority is {plan['recommended_action']['priority']}.")
     g.query("MATCH (s:System {name:$system}), (a:Agent {id:'AGENT-INVESTIGATOR'}) "
             "CREATE (i:Incident {id:$incident, status:'investigating'})-[:CONCERNS]->(s) "
             "CREATE (m:Memory {id:$memory, text:$text, kind:'investigation'}) "
@@ -480,7 +480,7 @@ def handoff_incident(incident_id, note="Investigation complete; please coordinat
     return incident_context(incident_id)
 
 
-def coordinator_create_followup(incident_id):
+def coordinator_create_followup(incident_id, decision=None):
     """Coordinator reads shared incident memory and creates the recommended ticket."""
     context = incident_context(incident_id)["data"]
     if "error" in context:
@@ -493,7 +493,7 @@ def coordinator_create_followup(incident_id):
     ticket = create_incident_followup(context["system"], plan["title"], plan["suggested_assignee"], plan["priority"])
     g = get_graph()
     memory_id = _next_id(g, "Memory", "MEM")
-    text = f"Read shared investigation memory and created {ticket['id']} for {ticket['assignee']}."
+    text = decision or f"Read shared investigation memory and created {ticket['id']} for {ticket['assignee']}."
     g.query("MATCH (i:Incident {id:$incident}), (t:Ticket {id:$ticket}), "
             "(a:Agent {id:'AGENT-COORDINATOR'}) SET i.status='responding' "
             "MERGE (i)-[:HAS_TICKET]->(t) "

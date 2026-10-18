@@ -3,3 +3,4 @@ streamlit>=1.35
 openai>=1.40
 python-dotenv>=1.0
 mcp[cli]>=2.3
+graphviz>=0.20

@@ -13,9 +13,9 @@ def analyze_system_impact(system: str) -> dict:
 
 
 @mcp.tool()
-def start_investigation(system: str) -> dict:
-    """Have the Incident Investigator save graph-derived findings as shared memory."""
-    return tools.start_incident_investigation(system)["data"]
+def start_investigation(system: str, summary: str | None = None) -> dict:
+    """Have the Incident Investigator save graph-derived findings and an optional verified report as shared memory."""
+    return tools.start_incident_investigation(system, summary=summary)["data"]
 
 
 @mcp.tool()
@@ -31,6 +31,6 @@ def handoff_to_coordinator(incident_id: str, note: str) -> dict:
 
 
 @mcp.tool()
-def coordinate_followup(incident_id: str) -> dict:
+def coordinate_followup(incident_id: str, decision: str | None = None) -> dict:
     """Have the Response Coordinator read shared memory and create the recommended ticket."""
-    return tools.coordinator_create_followup(incident_id)["data"]
+    return tools.coordinator_create_followup(incident_id, decision=decision)["data"]

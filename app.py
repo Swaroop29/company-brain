@@ -2,7 +2,6 @@
 import json
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 import agent
 import tools
@@ -24,21 +23,23 @@ EXAMPLES = [
 ]
 
 
-def graph_html(graph, height=430):
-    nodes = [{"id": n["id"], "label": n["text"], "title": n["title"], "shape": "dot", "size": 16,
-              "color": COLORS.get(n["label"], "#999"), "font": {"color": "#e6e6e6", "size": 12}}
-             for n in graph["nodes"]]
-    edges = [{"from": e["from"], "to": e["to"], "label": e["label"], "arrows": "to",
-              "font": {"size": 9, "color": "#9aa4b2", "strokeWidth": 0}, "color": {"color": "#5b6573"}}
-             for e in graph["edges"]]
-    return f"""
-    <div id="g" style="height:{height - 10}px;border:1px solid #333;border-radius:8px;background:#0e1117"></div>
-    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
-    <script>
-      new vis.Network(document.getElementById('g'),
-        {{nodes: new vis.DataSet({json.dumps(nodes)}), edges: new vis.DataSet({json.dumps(edges)})}},
-        {{physics: {{stabilization: true, barnesHut: {{springLength: 120}}}}, interaction: {{hover: true}}}});
-    </script>"""
+def graph_dot(graph):
+    """Build a native Graphviz view of the graph evidence."""
+    def escape(value):
+        return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+    lines = ["digraph evidence {", "rankdir=LR;", "bgcolor=transparent;",
+             'node [shape=box, style="rounded,filled", fontname="Arial"];',
+             'edge [fontname="Arial", fontsize=10, color="#637083", fontcolor="#465267"];']
+    for node in graph["nodes"]:
+        node_id = escape(node["id"])
+        label = escape(node["text"]) + "\\n(" + escape(node["label"]) + ")"
+        color = COLORS.get(node["label"], "#CBD5E1")
+        lines.append(f'"{node_id}" [label="{label}", fillcolor="{color}"];')
+    for edge in graph["edges"]:
+        lines.append(f'"{escape(edge["from"])}" -> "{escape(edge["to"])}" '
+                     f'[label="{escape(edge["label"])}"];')
+    return "\n".join(lines + ["}"])
 
 
 def legend():
@@ -54,6 +55,26 @@ def add_incident_message(heading, result):
         f"**Shared memories:** {len(data['memories'])} · **Handoffs:** {len(data['handoffs'])} · "
         f"**Follow-up tickets:** {len(data['tickets'])}\n\n"
         "Open **How I got this** to see the shared incident graph and its handoff path."
+    )
+    st.session_state.setdefault("messages", []).append({
+        "role": "assistant", "content": content,
+        "trace": [{"tool": "incident_context", "args": {"incident_id": data["id"]},
+                   "cypher": result["cypher"]}],
+        "graph": result["graph"]})
+
+
+def add_agent_message(run):
+    """Show one role's independent report and the incident state it saved to the shared graph."""
+    result = run["result"]
+    data = result["data"]
+    mode = "LLM report from verified graph evidence" if run["used_llm"] else "Graph-derived fallback report"
+    content = (
+        f"### {run['role']} completed: `{data['id']}`\n\n"
+        f"**Report:** {run['summary']}\n\n"
+        f"**Context used:** {'system impact evidence' if run['role'] == 'Incident Investigator' else 'saved incident memory, handoff, and current graph ownership data'}\n\n"
+        f"**Saved to shared memory:** {len(data['memories'])} finding(s) · "
+        f"**Handoffs:** {len(data['handoffs'])} · **Follow-up tickets:** {len(data['tickets'])}\n\n"
+        f"_{mode}. Open **How I got this** to inspect the persisted graph context._"
     )
     st.session_state.setdefault("messages", []).append({
         "role": "assistant", "content": content,
@@ -86,7 +107,7 @@ with st.sidebar:
 
     st.markdown("**Try a question**")
     for q in EXAMPLES:
-        if st.button(q, use_container_width=True):
+        if st.button(q, width="stretch"):
             st.session_state["pending"] = q
 
     with st.expander("Log a new decision (keeps the graph current)"):
@@ -110,7 +131,7 @@ with st.sidebar:
    "assignee":"Priya Nair","created":"2026-10-17","affects":["event-bus"]}
 ]''', language="json")
         uploaded = st.file_uploader("JSON file", type="json", key="company_records")
-        if uploaded and st.button("Import records", use_container_width=True):
+        if uploaded and st.button("Import records", width="stretch"):
             try:
                 payload = json.loads(uploaded.getvalue().decode("utf-8"))
                 records = payload.get("records") if isinstance(payload, dict) else payload
@@ -141,8 +162,14 @@ with st.sidebar:
                 priority = st.selectbox("Priority", priorities, index=priorities.index(action["priority"]))
                 if st.form_submit_button("Create follow-up ticket") and ticket_title:
                     try:
+                        impact_before = tools.impact_analysis(incident_system)
                         ticket = tools.create_incident_followup(incident_system, ticket_title, assignee, priority)
                         ticket_view = tools.get_item(ticket["id"])
+                        impact_after = tools.impact_analysis(ticket["system"])
+                        before_count = len(impact_before["data"]["open_tickets_on_this_system"])
+                        after_tickets = impact_after["data"]["open_tickets_on_this_system"]
+                        after_count = len(after_tickets)
+                        appears_after = any(item["id"] == ticket["id"] for item in after_tickets)
                         content = (
                             f"### Follow-up ticket created: `{ticket['id']}`\n\n"
                             f"**{ticket_title}** is now an open `{priority}` priority ticket assigned to "
@@ -150,13 +177,22 @@ with st.sidebar:
                             "The graph now includes:\n\n"
                             f"- `{ticket['id']}` → `ASSIGNED_TO` → {assignee}\n"
                             f"- `{ticket['id']}` → `AFFECTS` → {ticket['system']}\n\n"
+                            f"**Before → after proof:** impact analysis had `{before_count}` open ticket(s) before this "
+                            f"action and `{after_count}` afterward. `{ticket['id']}` is "
+                            f"{'now included' if appears_after else 'not yet included'} in later impact analysis results.\n\n"
                             "Open **How I got this** to see the graph path and Cypher used to read the new ticket."
                         )
                         st.session_state.setdefault("messages", []).append({
                             "role": "assistant", "content": content,
-                            "trace": [{"tool": "get_item", "args": {"item_id": ticket["id"]},
-                                       "cypher": ticket_view["cypher"]}],
-                            "graph": ticket_view["graph"]})
+                            "trace": [
+                                {"tool": "impact_analysis (before)", "args": {"system": ticket["system"]},
+                                 "cypher": impact_before["cypher"]},
+                                {"tool": "get_item", "args": {"item_id": ticket["id"]},
+                                 "cypher": ticket_view["cypher"]},
+                                {"tool": "impact_analysis (after)", "args": {"system": ticket["system"]},
+                                 "cypher": impact_after["cypher"]},
+                            ],
+                            "graph": impact_after["graph"]})
                         st.rerun()
                     except Exception as e:
                         st.error(f"Could not create follow-up ticket: {e}")
@@ -164,13 +200,13 @@ with st.sidebar:
             st.warning("No active owner is available for this system.")
 
     with st.expander("Track 2: shared incident memory and handoff"):
-        st.caption("The Investigator saves findings in FalkorDB. The Coordinator reads the same memory later.")
+        st.caption("Two separate role prompts work from graph evidence. Their reports, handoff and ticket persist in FalkorDB.")
         coordination_systems = [row[0] for row in g.query("MATCH (s:System) RETURN s.name ORDER BY s.name").result_set]
         coordination_system = st.selectbox("System to investigate", coordination_systems, key="coordination_system")
-        if st.button("Investigator: save graph findings", use_container_width=True):
+        if st.button("Run Incident Investigator", width="stretch"):
             try:
-                result = tools.start_incident_investigation(coordination_system)
-                add_incident_message("Investigator saved shared memory", result)
+                run = agent.investigate_incident(coordination_system)
+                add_agent_message(run)
                 st.rerun()
             except Exception as e:
                 st.error(f"Could not start investigation: {e}")
@@ -186,7 +222,7 @@ with st.sidebar:
                      f"**tickets:** {len(current['tickets'])}")
             with st.form("handoff_incident"):
                 handoff_note = st.text_area("Handoff note", value="Investigation complete; please coordinate recovery.")
-                if st.form_submit_button("Investigator: hand off to Coordinator"):
+                if st.form_submit_button("Hand off to Response Coordinator"):
                     try:
                         result = tools.handoff_incident(incident_id, handoff_note)
                         add_incident_message("Investigator handed off the incident", result)
@@ -194,15 +230,16 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"Could not hand off incident: {e}")
             if not current["tickets"]:
-                if st.button("Coordinator: create recommended follow-up", use_container_width=True):
+                if st.button("Run Response Coordinator", width="stretch"):
                     try:
-                        result = tools.coordinator_create_followup(incident_id)
-                        add_incident_message("Coordinator used shared memory and created follow-up", result)
+                        run = agent.coordinate_incident(incident_id)
+                        add_agent_message(run)
                         st.rerun()
                     except Exception as e:
                         st.error(f"Could not create coordinated follow-up: {e}")
 
-    if st.button("Reset demo data"):
+    st.caption("Reset removes imported records, generated tickets, incidents, memories and handoffs.")
+    if st.button("Reset demo data and workflow records", width="stretch"):
         ingest()
         st.session_state.pop("messages", None)
         st.rerun()
@@ -219,7 +256,8 @@ def render_trace(m):
     with st.expander("How I got this: tools, Cypher and graph", expanded=False):
         if m.get("graph", {}).get("nodes"):
             st.markdown(legend(), unsafe_allow_html=True)
-            components.html(graph_html(m["graph"]), height=440)
+            st.graphviz_chart(graph_dot(m["graph"]), width="stretch", height=440,
+                              alt="Graph nodes and relationships used to produce this answer")
         for step in m.get("trace", []):
             st.markdown(f"**Tool:** `{step['tool']}({json.dumps(step['args'])})`")
             for c in step["cypher"]:

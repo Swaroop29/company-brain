@@ -137,21 +137,26 @@ dataset.py -> ingest.py -> FalkorDB <- tools.py (Cypher) <- agent.py (LLM tool c
 
 ## Shared incident memory and MCP
 
-The Track 2 workflow stores incident investigation findings and handoffs in FalkorDB. The **Incident Investigator**
-creates an `Incident` and `Memory` node. The **Response Coordinator** reads that shared context, receives a
-`Handoff`, and can create a linked follow-up ticket. This survives page reloads and can be continued later.
+The Track 2 workflow uses separate **Incident Investigator** and **Response Coordinator** role prompts. Each role
+receives only verified graph context and writes its own operational report into FalkorDB. The Investigator creates
+an `Incident` and `Memory` node. The Response Coordinator later reads that shared context, receives a `Handoff`,
+records an independent recovery decision, and creates a linked follow-up ticket. This survives page reloads and can
+be continued later. If an LLM provider is unavailable, the graph-derived workflow still runs with a clearly labelled
+fallback report.
 
 The same operations are available through `mcp_server.py` for any MCP-compatible agent. After installing the
 requirements, run `mcp dev mcp_server.py` to inspect the tools: system impact analysis, investigation, memory
-reading, handoff, and follow-up coordination.
+reading, handoff, and follow-up coordination. To demonstrate an external MCP client, start the server with
+`mcp run mcp_server.py:mcp --transport streamable-http`, then run `python mcp_demo.py INC-1`.
 
 ## Track demos
 
 - **Track 1:** Choose a failed system in **Respond to a system incident**. The graph finds dependent systems,
-  owners, and active responders, then stores the confirmed follow-up ticket and its relationships.
-- **Track 2:** In **Track 2: shared incident memory and handoff**, save an Investigator finding, hand it to the
-  Coordinator, and create a follow-up ticket. The `Incident`, `Memory`, `Handoff`, and `Ticket` remain in
-  FalkorDB after a page refresh.
+  owners, and active responders, then stores the confirmed follow-up ticket and its relationships. The chat shows
+  a before-and-after impact analysis proving the new ticket changes later graph results.
+- **Track 2:** In **Track 2: shared incident memory and handoff**, run the Incident Investigator, hand its saved
+  finding to the Response Coordinator, and run the Coordinator. The `Incident`, both role reports as `Memory`, the
+  `Handoff`, and the `Ticket` remain in FalkorDB after a page refresh.
 - **Track 3:** Ask a question in the chat. Each answer is based on graph queries, and **How I got this** shows
   the Cypher and graph path used.
 
