@@ -39,9 +39,33 @@ def graph_html(graph, height=430):
       const network = new vis.Network(document.getElementById('g'),
         {{nodes: new vis.DataSet({json.dumps(nodes)}), edges: new vis.DataSet({json.dumps(edges)})}},
         {{physics: {{stabilization: true, barnesHut: {{springLength: 120}}}}, interaction: {{hover: true}}}});
-      network.once('stabilizationIterationsDone', function () {{
-        network.fit({{animation: false}});
+      let centered = false;
+      const centerGraph = function () {{
+        network.redraw();
+        const positions = Object.values(network.getPositions());
+        if (!positions.length) return;
+        const minX = Math.min(...positions.map((point) => point.x));
+        const maxX = Math.max(...positions.map((point) => point.x));
+        const minY = Math.min(...positions.map((point) => point.y));
+        const maxY = Math.max(...positions.map((point) => point.y));
+        const canvas = document.querySelector('#g canvas');
+        if (!canvas.clientWidth || !canvas.clientHeight) return;
+        const padding = 96;
+        const scale = Math.min(1, canvas.clientWidth / (maxX - minX + padding),
+          canvas.clientHeight / (maxY - minY + padding));
+        network.moveTo({{
+          position: {{x: (minX + maxX) / 2, y: (minY + maxY) / 2}},
+          scale: Math.max(scale, 0.25), animation: false
+        }});
+        centered = true;
+      }};
+      const resizeObserver = new ResizeObserver(function () {{
+        if (!centered) centerGraph();
       }});
+      resizeObserver.observe(document.getElementById('g'));
+      network.once('stabilizationIterationsDone', centerGraph);
+      window.setTimeout(centerGraph, 250);
+      window.setTimeout(centerGraph, 900);
     </script>"""
 
 def legend():
