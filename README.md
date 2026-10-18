@@ -12,12 +12,12 @@ Built for **Graph Hacks (FalkorDB x WeMakeDevs)**. This submission enters:
 
 ## App pages
 
-- **Home** explains the product and gives a clear starting point for a first-time visitor.
+- **Home** explains the product and provides quick-start actions for asking questions, updating knowledge, responding to an incident, and coordinating agents.
 - **Explore Knowledge** is the chat workspace for company questions and graph evidence.
-- **Graph Schema** shows the nodes and relationships queried by the app.
-- **About & Demo** describes the three Graph Hacks workflows and a suggested demo path.
+- **Graph Schema** is a live FalkorDB explorer: search a record, inspect its properties, and view its direct relationships.
+- **About & Demo** presents the three Graph Hacks tracks side by side. Each card opens its proof flow; the recording guide is kept in a collapsed **For the hackathon demo** section.
 
-Use the sun/moon button in the top bar to choose the interface appearance. The graph evidence view keeps a dark canvas so node colours and labels remain easy to read.
+The app uses a consistent dark appearance. The graph evidence canvas is also dark so node colours and labels remain easy to read.
 
 ## What it can answer
 
@@ -55,7 +55,7 @@ administrative clause. The exact generated query appears under **How I got this*
 (Handoff)-[:TO]->(Agent)
 ```
 
-About 75 nodes and 176 relationships, all synthetic (see `dataset.py`).
+The seeded graph and all demo records are synthetic (see `dataset.py`). Node and relationship counts can grow when you import records or run an incident workflow.
 
 ## Key Cypher and algorithms (all in `tools.py`)
 
